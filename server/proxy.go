@@ -22,6 +22,10 @@ func (m *message) finish() {
 	close(m.done)
 }
 
+func newMessage() message {
+	return message{done: make(chan response)}
+}
+
 // result blocks and waits for a response on the message's done channel
 // and returns a slice of bytes and the message's status
 func (m *message) result(ctx context.Context) ([]byte, bool) {
@@ -73,10 +77,8 @@ func (qp *QueryProxy) Listen(ctx context.Context) {
 }
 
 func (qp *QueryProxy) Get(ctx context.Context, key []byte) ([]byte, bool) {
-	msg := message{
-		Key:  key,
-		done: make(chan response),
-	}
+	msg := newMessage()
+	msg.Key = key
 	defer msg.finish()
 	select {
 	case <-ctx.Done():
@@ -87,11 +89,9 @@ func (qp *QueryProxy) Get(ctx context.Context, key []byte) ([]byte, bool) {
 }
 
 func (qp *QueryProxy) Set(ctx context.Context, key, value []byte) bool {
-	msg := message{
-		Key:   key,
-		Value: value,
-		done:  make(chan response),
-	}
+	msg := newMessage()
+	msg.Key = key
+	msg.Value = value
 	defer msg.finish()
 	select {
 	case <-ctx.Done():
