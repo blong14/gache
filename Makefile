@@ -1,0 +1,6 @@
+
+bench:
+	~/sdk/go1.18/bin/go test -cpu=1 -bench=TableMap -run=XXX ./...
+
+test:
+	~/sdk/go1.18/bin/go test -race -v ./...
