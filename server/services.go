@@ -8,9 +8,9 @@ import (
 	"net/rpc"
 	"sync"
 
-	genc "gache/server/encoding"
-	ghttp "gache/server/http"
-	grpc "gache/server/rpc"
+	genc "github.com/blong14/gache/server/encoding"
+	ghttp "github.com/blong14/gache/server/http"
+	grpc "github.com/blong14/gache/server/rpc"
 )
 
 func HealthzService(w http.ResponseWriter, _ *http.Request) {

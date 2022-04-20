@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 
-	gmap "gache/cache/kv/sorted"
+	gmap "github.com/blong14/gache/cache/kv/sorted"
 )
 
 type response struct {

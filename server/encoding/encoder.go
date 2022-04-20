@@ -3,7 +3,7 @@ package encoding
 import (
 	"bytes"
 	"encoding/gob"
-	"gache/errors"
+	"github.com/blong14/gache/errors"
 )
 
 type GCoder struct {

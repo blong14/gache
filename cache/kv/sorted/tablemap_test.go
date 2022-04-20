@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	gtree "gache/cache/kv/sorted"
+	gtree "github.com/blong14/gache/cache/kv/sorted"
 )
 
 func testGetAndSet(t *testing.T) {

@@ -7,9 +7,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	gsrv "gache/server"
-	ghttp "gache/server/http"
-	grpc "gache/server/rpc"
+	gsrv "github.com/blong14/gache/server"
+	ghttp "github.com/blong14/gache/server/http"
+	grpc "github.com/blong14/gache/server/rpc"
 )
 
 func main() {

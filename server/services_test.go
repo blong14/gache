@@ -3,7 +3,7 @@ package server_test
 import (
 	"testing"
 
-	gsrv "gache/server"
+	gsrv "github.com/blong14/gache/server"
 )
 
 func setStatusTest(t *testing.T) {
