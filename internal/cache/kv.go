@@ -1,4 +1,4 @@
-package kv
+package cache
 
 type KV interface {
 	Get(k any) (any, bool)

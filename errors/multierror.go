@@ -78,6 +78,13 @@ func (e chain) Is(target error) bool {
 	return errors.Is(e[0], target)
 }
 
+func NewGError(e error) *Error {
+	return &Error{
+		msg:    e.Error(),
+		Errors: []error{e},
+	}
+}
+
 func Append(err error, errs ...error) *Error {
 	switch err := err.(type) {
 	case *Error:

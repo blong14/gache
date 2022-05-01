@@ -7,9 +7,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	gsrv "github.com/blong14/gache/server"
-	ghttp "github.com/blong14/gache/server/http"
-	grpc "github.com/blong14/gache/server/rpc"
+	ghttp "github.com/blong14/gache/internal/io/http"
+	grpc "github.com/blong14/gache/internal/io/rpc"
 )
 
 func main() {
@@ -17,25 +16,25 @@ func main() {
 	signal.Notify(sigint, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	qp, err := gsrv.NewQueryProxy()
+	qp, err := NewQueryProxy()
 	if err != nil {
 		log.Fatal(err)
 	}
-	go qp.Listen(ctx)
+	go StartProxy(ctx, qp)
 
 	rpcSRV := ghttp.Server(":8080")
-	go grpc.Start(rpcSRV, gsrv.RpcHandlers(qp))
+	go grpc.Start(rpcSRV, RpcHandlers(qp))
 
 	httpSRV := ghttp.Server(":8081")
-	go ghttp.Start(httpSRV, gsrv.HttpHandlers())
+	go ghttp.Start(httpSRV, HttpHandlers(qp))
 
 	go RunClient()
 
 	s := <-sigint
 	log.Printf("received %s signal\n", s)
 	ghttp.Stop(ctx, httpSRV, rpcSRV)
+	StopProxy(ctx, qp)
 	cancel()
-	gsrv.CloseQueryProxy(qp)
 }
 
 func RunClient() {
@@ -46,12 +45,12 @@ func RunClient() {
 
 	name := "spoke-01"
 
-	resp, err := gsrv.Register(client, gsrv.Spoke{Name: name})
+	resp, err := Register(client, Spoke{Name: name})
 	log.Println(resp, err)
 
-	resp_, _ := gsrv.SetStatus(client, gsrv.Spoke{Name: name, Status: "Not OK"})
+	resp_, _ := SetStatus(client, Spoke{Name: name, Status: "Not OK"})
 	log.Println(resp_, err)
 
-	respx, _ := gsrv.List(client)
+	respx, _ := List(client)
 	log.Println(respx, err)
 }

@@ -3,6 +3,7 @@ package encoding
 import (
 	"bytes"
 	"encoding/gob"
+
 	"github.com/blong14/gache/errors"
 )
 

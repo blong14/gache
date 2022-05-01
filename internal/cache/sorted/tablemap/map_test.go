@@ -1,18 +1,22 @@
-package sorted_test
+package tablemap_test
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 
-	gtree "github.com/blong14/gache/cache/kv/sorted"
+	gtree "github.com/blong14/gache/internal/cache/sorted/tablemap"
 )
 
 func testGetAndSet(t *testing.T) {
 	t.Parallel()
 	// given
-	tree := gtree.New[string, string](strings.Compare)
+	tree := gtree.NewWithOptions[string, string](
+		strings.Compare,
+		gtree.WithCapacity[string, string](1024),
+	)
 	expected := "value"
 	keys := []string{
 		"key8",
@@ -138,7 +142,7 @@ func BenchmarkTableMap_LoadMostlyHits(b *testing.B) {
 	benchMap(b, bench{
 		setup: func(_ *testing.B, m *gtree.TableMap[string, string]) {
 			for i := 0; i < hits; i++ {
-				m.Set(fmt.Sprintf("key%d", i), fmt.Sprintf("value%d", i))
+				m.Set(strconv.Itoa(i), strconv.Itoa(i))
 			}
 			// Prime the map to get it into a steady state.
 			for i := 0; i < hits*2; i++ {
@@ -147,16 +151,11 @@ func BenchmarkTableMap_LoadMostlyHits(b *testing.B) {
 		},
 		perG: func(b *testing.B, pb *testing.PB, i int, m *gtree.TableMap[string, string]) {
 			for ; pb.Next(); i++ {
-				m.Get(fmt.Sprintf("key%d", i%(hits+misses)))
-			}
-		},
-		teardown: func(_ *testing.B, m *gtree.TableMap[string, string]) func() {
-			return func() {
-				// TODO: add stats counting for hits/misses
-				b.Log(m.Size())
+				m.Get(strconv.Itoa(i % (hits + misses)))
 			}
 		},
 	})
+
 }
 
 func BenchmarkTableMap_LoadOrStoreBalanced(b *testing.B) {
@@ -165,7 +164,7 @@ func BenchmarkTableMap_LoadOrStoreBalanced(b *testing.B) {
 	benchMap(b, bench{
 		setup: func(b *testing.B, m *gtree.TableMap[string, string]) {
 			for i := 0; i < hits; i++ {
-				m.Set(fmt.Sprintf("key%d", i), fmt.Sprintf("value%d", i))
+				m.Set(strconv.Itoa(i), strconv.Itoa(i))
 			}
 			// Prime the map to get it into a steady state.
 			for i := 0; i < hits*2; i++ {
@@ -176,21 +175,12 @@ func BenchmarkTableMap_LoadOrStoreBalanced(b *testing.B) {
 			for ; pb.Next(); i++ {
 				j := i % (hits + misses)
 				if j < hits {
-					if _, ok := m.Get(fmt.Sprintf("key%d", j)); !ok {
-						b.Fatalf("unexpected miss for key%v", j)
+					if _, ok := m.Get(strconv.Itoa(j)); !ok {
+						b.Fatalf("unexpected miss for key %v", j)
 					}
 				} else {
-					m.Set(fmt.Sprintf("key%d", i), fmt.Sprintf("value%d", i))
-					if _, ok := m.Get(fmt.Sprintf("key%d", i)); !ok {
-						b.Fatalf("unexpected miss for %v", i)
-					}
+					m.Set(strconv.Itoa(i), strconv.Itoa(i))
 				}
-			}
-		},
-		teardown: func(_ *testing.B, m *gtree.TableMap[string, string]) func() {
-			return func() {
-				// TODO: add stats counting for hits/misses
-				b.Log(m.Size())
 			}
 		},
 	})
@@ -216,7 +206,7 @@ func BenchmarkTableMap_Range(b *testing.B) {
 	benchMap(b, bench{
 		setup: func(_ *testing.B, m *gtree.TableMap[string, string]) {
 			for i := 0; i < mapSize; i++ {
-				m.Set(fmt.Sprintf("key%d", i), fmt.Sprintf("value%d", i))
+				m.Set(strconv.Itoa(i), strconv.Itoa(i))
 			}
 		},
 		perG: func(b *testing.B, pb *testing.PB, i int, m *gtree.TableMap[string, string]) {

@@ -1,0 +1,34 @@
+package cache_test
+
+import (
+	"bytes"
+	"testing"
+
+	gache "github.com/blong14/gache/internal/cache"
+	gtree "github.com/blong14/gache/internal/cache/sorted/tablemap"
+)
+
+func TestReader_ViewGet(t *testing.T) {
+	// given
+	k := []byte("key")
+	expected := []byte("value")
+	v := gache.NewView(
+		&gache.ViewOpts{
+			WithDB: func() *gache.DB {
+				impl := gtree.New[[]byte, []byte](bytes.Compare)
+				impl.Set(k, expected)
+				return gache.NewDB(&gache.DBOpts{
+					Impl: impl,
+				})
+			},
+		},
+	)
+
+	// when
+	actual, ok := v.Get(k)
+
+	// then
+	if !ok || !(bytes.Compare(actual, expected) == 0) {
+		t.Errorf("want %s got %s", expected, actual)
+	}
+}
