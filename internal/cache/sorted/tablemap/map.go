@@ -2,6 +2,7 @@ package tablemap
 
 import (
 	"fmt"
+	glog "github.com/blong14/gache/logging"
 	"log"
 )
 
@@ -87,6 +88,7 @@ func (c *TableMap[K, V]) greaterthan(key K, i uint) bool {
 
 // Get returns the value associated with the specified key (or else false)
 func (c *TableMap[K, V]) Get(key K) (V, bool) {
+	glog.Track("%T Get %v", c, key)
 	j := c.search(key)
 	if j == c.Size() || !c.equalto(key, uint(j)) {
 		return *new(V), false

@@ -4,50 +4,32 @@ import (
 	gtree "github.com/blong14/gache/internal/cache/sorted/tablemap"
 )
 
+type Table interface {
+	Get(key []byte) ([]byte, bool)
+	Set(key []byte, value []byte)
+}
+
 type DB struct {
 	impl *gtree.TableMap[[]byte, []byte]
 }
 
-type DBOpts struct {
-	Impl *gtree.TableMap[[]byte, []byte]
-}
-
-func NewDB(o *DBOpts) *DB {
-	var impl *gtree.TableMap[[]byte, []byte]
-	if o.Impl != nil {
-		impl = o.Impl
-	}
-	return &DB{impl}
-}
-
-func (db *DB) get(key []byte) ([]byte, bool) {
+func (db *DB) Get(key []byte) ([]byte, bool) {
 	return db.impl.Get(key)
 }
 
-type Reader interface {
-	Get(key []byte) ([]byte, bool)
+func (db *DB) Set(key []byte, value []byte) {
+	db.impl.Set(key, value)
 }
 
-type View struct {
-	table *DB
+type TableOpts struct {
+	WithDB    func() *DB
+	WithCache func() *gtree.TableMap[[]byte, []byte]
 }
 
-type ViewOpts struct {
-	WithDB func() *DB
-}
-
-func NewView(o *ViewOpts) Reader {
-	var db *DB
-	if o.WithDB != nil {
-		db = o.WithDB()
+func NewTable(o *TableOpts) Table {
+	var db *gtree.TableMap[[]byte, []byte]
+	if o.WithCache != nil {
+		db = o.WithCache()
 	}
-	return &View{table: db}
-}
-
-func (v *View) Get(key []byte) ([]byte, bool) {
-	return v.table.get(key)
-}
-
-type Writer interface {
-	Set(key []byte, value []byte) error
+	return &DB{impl: db}
 }

@@ -14,15 +14,12 @@ func assertMatch(t *testing.T, want []byte, got []byte) {
 	}
 }
 
-func testGet_Hit(v gactors.ViewActor, expected *gactors.Response) func(t *testing.T) {
+func testGet_Hit(v gactors.TableActor, expected *gactors.QueryResponse) func(t *testing.T) {
 	return func(t *testing.T) {
 		t.Parallel()
 		ctx := context.TODO()
-		query := gactors.NewQuery()
-		query.CMD = gactors.GetValue
-		query.Key = expected.Key
-		query.Value = expected.Value
-		go v.Get(context.TODO(), &query)
+		query := gactors.NewGetValueQuery([]byte("default"), expected.Key)
+		go v.Get(context.TODO(), query)
 		value, ok := query.Result(ctx)
 		if !ok {
 			t.Errorf("not ok %v", query)
@@ -35,9 +32,9 @@ func TestViewActor_Get(t *testing.T) {
 	t.Parallel()
 	// given
 	ctx := context.TODO()
-	v := gactors.NewViewActor()
+	v := gactors.NewTableActor()
 	go v.Start(ctx)
-	hit := &gactors.Response{
+	hit := &gactors.QueryResponse{
 		Key:   []byte("key"),
 		Value: []byte("value"),
 	}

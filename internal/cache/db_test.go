@@ -12,14 +12,12 @@ func TestReader_ViewGet(t *testing.T) {
 	// given
 	k := []byte("key")
 	expected := []byte("value")
-	v := gache.NewView(
-		&gache.ViewOpts{
-			WithDB: func() *gache.DB {
+	v := gache.NewTable(
+		&gache.TableOpts{
+			WithCache: func() *gtree.TableMap[[]byte, []byte] {
 				impl := gtree.New[[]byte, []byte](bytes.Compare)
 				impl.Set(k, expected)
-				return gache.NewDB(&gache.DBOpts{
-					Impl: impl,
-				})
+				return impl
 			},
 		},
 	)

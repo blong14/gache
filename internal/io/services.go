@@ -3,11 +3,13 @@ package io
 import (
 	"context"
 	"encoding/json"
+	glog "github.com/blong14/gache/logging"
 	"io"
 	"log"
 	"net/http"
 	"net/rpc"
 	"sync"
+	"time"
 
 	gactors "github.com/blong14/gache/internal/actors"
 	genc "github.com/blong14/gache/internal/io/encoding"
@@ -24,27 +26,33 @@ func HealthzService(w http.ResponseWriter, _ *http.Request) {
 
 func GetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
 		resp := make(map[string]string)
 		urlQuery := r.URL.Query()
 		if !urlQuery.Has("key") {
 			ghttp.MustWriteJSON(w, r, http.StatusBadRequest, resp)
 			return
 		}
-		key := urlQuery.Get("key")
-		query := gactors.NewQuery()
-		query.CMD = gactors.GetValue
-		query.Key = []byte(key)
-		go qp.Get(r.Context(), &query)
-		value, ok := query.Result(r.Context())
-		if !ok {
+		database := urlQuery.Get("database")
+		if database == "" {
+			database = "default"
+		}
+		db := []byte(database)
+		key := []byte(urlQuery.Get("key"))
+		query := gactors.NewGetValueQuery(db, key)
+		ctx, cancel := context.WithCancel(r.Context())
+		defer cancel()
+		go qp.Get(ctx, query)
+		if value, ok := query.Result(ctx); !ok {
 			resp["error"] = "not found"
 			ghttp.MustWriteJSON(w, r, http.StatusNotFound, resp)
-			return
+		} else {
+			resp["status"] = "ok"
+			resp["key"] = string(key)
+			resp["value"] = string(value)
+			ghttp.MustWriteJSON(w, r, http.StatusOK, resp)
+			glog.Track("Get key=%s time=%s", query.Key, time.Since(start))
 		}
-		resp["status"] = "ok"
-		resp["key"] = key
-		resp["value"] = string(value)
-		ghttp.MustWriteJSON(w, r, http.StatusOK, resp)
 	}
 }
 
@@ -70,7 +78,6 @@ func SetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 			return
 		}
 		query := gactors.NewQuery()
-		query.CMD = gactors.GetValue
 		query.Key = req.Key
 		query.Value = req.Value
 		go qp.Set(context.TODO(), &query)
@@ -118,21 +125,7 @@ type RegisterResponse struct {
 }
 
 func (r *RegisterService) Register(req *RegisterRequest, resp *RegisterResponse) error {
-	enc := genc.New()
-	key := enc.Encode(req.Item.Name)
-	value := enc.Encode(req.Item)
-	if enc.HasError() {
-		return enc.Err
-	}
-	resp.Status = "not ok"
-	query := gactors.NewQuery()
-	query.CMD = gactors.AddIndex
-	query.Key = key
-	query.Value = value
-	go r.Proxy.Set(context.TODO(), &query)
-	if _, ok := query.Result(context.Background()); ok {
-		resp.Status = "ok"
-	}
+	glog.Track("%T not implemeneted", r)
 	return nil
 }
 
