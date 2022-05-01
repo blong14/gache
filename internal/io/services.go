@@ -1,4 +1,4 @@
-package main
+package io
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 	genc "github.com/blong14/gache/internal/io/encoding"
 	ghttp "github.com/blong14/gache/internal/io/http"
 	grpc "github.com/blong14/gache/internal/io/rpc"
+	gproxy "github.com/blong14/gache/proxy"
 )
 
 func HealthzService(w http.ResponseWriter, _ *http.Request) {
@@ -21,7 +22,7 @@ func HealthzService(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
-func GetValueService(qp *QueryProxy) http.HandlerFunc {
+func GetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		resp := make(map[string]string)
 		urlQuery := r.URL.Query()
@@ -52,7 +53,7 @@ type SetValueRequest struct {
 	Value []byte `json:"value"`
 }
 
-func SetValueService(qp *QueryProxy) http.HandlerFunc {
+func SetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		resp := make(map[string]string)
 		body, err := r.GetBody()
@@ -84,7 +85,7 @@ func SetValueService(qp *QueryProxy) http.HandlerFunc {
 	}
 }
 
-func HttpHandlers(qp *QueryProxy) ghttp.Handler {
+func HttpHandlers(qp *gproxy.QueryProxy) ghttp.Handler {
 	return map[string]http.HandlerFunc{
 		"/healthz": HealthzService,
 		"/get":     ghttp.MustBe(http.MethodGet, GetValueService(qp)),
@@ -104,7 +105,7 @@ var (
 )
 
 type RegisterService struct {
-	Proxy *QueryProxy
+	Proxy *gproxy.QueryProxy
 }
 
 type RegisterRequest struct {
@@ -206,7 +207,7 @@ func SetStatus(client *rpc.Client, spoke Spoke) (*StatusResponse, error) {
 	return resp, err
 }
 
-func RpcHandlers(proxy *QueryProxy) []grpc.Handler {
+func RpcHandlers(proxy *gproxy.QueryProxy) []grpc.Handler {
 	return []grpc.Handler{
 		&RegisterService{
 			Proxy: proxy,

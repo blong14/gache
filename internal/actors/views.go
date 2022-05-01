@@ -33,7 +33,10 @@ func (va *viewActor) Start(c context.Context) {
 		select {
 		case <-c.Done():
 			return
-		case query := <-va.inbox:
+		case query, ok := <-va.inbox:
+			if !ok {
+				return
+			}
 			query.OnResult(
 				context.TODO(),
 				Response{

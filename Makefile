@@ -1,7 +1,10 @@
 
 bench: clean
-	# ~/sdk/go1.18/bin/go test sync -cpu=1 -bench=BenchmarkLoad -benchmem -run=XXX
+	~/sdk/go1.18/bin/go test sync -cpu=1 -bench=BenchmarkLoad -benchmem -run=XXX
 	~/sdk/go1.18/bin/go test -v -cpu=1 -bench=Sorted -run=XXX ./...
+
+docs:
+	~/sdk/go1.18/bin/go doc -all
 
 clean:
 	~/sdk/go1.18/bin/go clean --cache --testcache ./...
@@ -12,5 +15,5 @@ lint:
 run: lint
 	~/sdk/go1.18/bin/go run github.com/blong14/gache
 
-test: clean
-	~/sdk/go1.18/bin/go test -race -v ./...
+test: lint
+	~/sdk/go1.18/bin/go test -race ./...
