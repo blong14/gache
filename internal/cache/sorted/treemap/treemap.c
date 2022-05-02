@@ -42,11 +42,32 @@ MapEntry *search(MapEntry *start, char *key)
         return search(start->right, key);
 }
 
+MapEntry *xsearch(MapEntry *start, char *key)
+{
+    if (start == NULL)
+        return NULL;
+    int comp;
+    MapEntry *next = start;
+    do {
+        comp = compare(next->key, key);
+        if (comp < 0) {
+            next = next->left;
+            continue;
+        } else if (comp == 0) {
+            return next;
+        } else {
+            next = next->right;
+            continue;
+        }
+    } while (next != NULL);
+    return NULL;
+}
+
 MapEntry *get(MapEntry *start, char *key)
 {
     if (start == NULL)
         return NULL;
-    return search(start, key);
+    return xsearch(start, key);
 }
 
 MapEntry *insert(MapEntry *start, char *key, char *value)

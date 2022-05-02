@@ -6,8 +6,6 @@ import "C"
 
 import (
 	"fmt"
-	glog "github.com/blong14/gache/logging"
-	"time"
 )
 
 type mapEntry struct {
@@ -53,7 +51,6 @@ func (t *TreeMap[K, V]) search(start *mapEntry, key K) (*mapEntry, bool) {
 }
 
 func (t *TreeMap[K, V]) Get(key K) (V, bool) {
-	start := time.Now()
 	if t.Size() == 0 {
 		return *new(V), false
 	}
@@ -61,7 +58,6 @@ func (t *TreeMap[K, V]) Get(key K) (V, bool) {
 	if !ok {
 		return *new(V), false
 	}
-	glog.Track("impl search key=%v time=%s", key, time.Since(start))
 	return node.value.(V), true
 }
 

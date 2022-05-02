@@ -186,54 +186,16 @@ func BenchmarkSorted_Append(b *testing.B) {
 	}
 }
 
-//
-//func BenchmarkSorted_Append(b *testing.B) {
-//	for _, hits := range []int{100_000} {
-//		b.Run(fmt.Sprintf("CTreeMap_%d", hits), func(b *testing.B) {
-//			b.ReportAllocs()
-//			ctreeMap := newCTreeMap(b, hits)
-//			for i := 0; i < b.N; i++ {
-//				gtree.Set(ctreeMap, "99999", "99")
-//			}
-//		})
-//
-//		b.Run(fmt.Sprintf("TreeMap_%d", hits), func(b *testing.B) {
-//			b.ReportAllocs()
-//			treeMap := newTreeMap(b, hits)
-//			for i := 0; i < b.N; i++ {
-//				treeMap.Set("99999", "99")
-//			}
-//		})
-//
-//		b.Run(fmt.Sprintf("TableMap_%d", hits), func(b *testing.B) {
-//			b.ReportAllocs()
-//			tableMap := newTableMap(b, hits)
-//			for i := 0; i < b.N; i++ {
-//				tableMap.Set("99999", "99")
-//			}
-//		})
-//
-//		b.Run(fmt.Sprintf("sync.Map_%d", hits), func(b *testing.B) {
-//			b.ReportAllocs()
-//			syncMap := newSyncMap(b, hits)
-//			for i := 0; i < b.N; i++ {
-//				syncMap.Store("99999", "99")
-//			}
-//		})
-//	}
-//}
-
-/*func BenchmarkSorted_UpdateRandom(b *testing.B) {
+func BenchmarkSorted_GetRandom(b *testing.B) {
 	hits := 10_000
 	input := []string{"5", "9", "3", "0", "99", "4", "1", "2"}
 	b.Run("CTreeMap", func(b *testing.B) {
 		b.ReportAllocs()
-		newCTreeMap(b, hits)
+		ctreeMap := newCTreeMap(b, hits)
 		for i := 0; i < b.N; i++ {
 			for _, i := range input {
-				gtree.Set(i, i)
-				if _, ok := gtree.Get(i); !ok {
-					b.Errorf("missing key")
+				if value, ok := gtree.Get(ctreeMap, i); !ok {
+					b.Errorf("want %s got %s", i, value)
 				}
 			}
 		}
@@ -244,7 +206,9 @@ func BenchmarkSorted_Append(b *testing.B) {
 		treeMap := newTreeMap(b, hits)
 		for i := 0; i < b.N; i++ {
 			for _, i := range input {
-				treeMap.Set(i, i)
+				if value, ok := treeMap.Get(i); !ok {
+					b.Errorf("want %s got %s", i, value)
+				}
 			}
 		}
 	})
@@ -254,7 +218,9 @@ func BenchmarkSorted_Append(b *testing.B) {
 		tableMap := newTableMap(b, hits)
 		for i := 0; i < b.N; i++ {
 			for _, i := range input {
-				tableMap.Set(i, i)
+				if value, ok := tableMap.Get(i); !ok {
+					b.Errorf("want %s got %s", i, value)
+				}
 			}
 		}
 	})
@@ -264,61 +230,10 @@ func BenchmarkSorted_Append(b *testing.B) {
 		syncMap := newSyncMap(b, hits)
 		for i := 0; i < b.N; i++ {
 			for _, i := range input {
-				syncMap.Store(i, i)
+				if value, ok := syncMap.Load(i); !ok {
+					b.Errorf("want %s got %s", i, value)
+				}
 			}
 		}
 	})
 }
-*/
-//
-//func BenchmarkSorted_GetRandom(b *testing.B) {
-//	hits := 10_000
-//	input := []string{"5", "9", "3", "0", "99", "4", "1", "2"}
-//	b.Run("CTreeMap", func(b *testing.B) {
-//		b.ReportAllocs()
-//		ctreeMap := newCTreeMap(b, hits)
-//		for i := 0; i < b.N; i++ {
-//			for _, i := range input {
-//				if value, ok := gtree.Get(ctreeMap, i); !ok {
-//					b.Errorf("want %s got %s", i, value)
-//				}
-//			}
-//		}
-//	})
-//
-//	b.Run("TreeMap", func(b *testing.B) {
-//		b.ReportAllocs()
-//		treeMap := newTreeMap(b, hits)
-//		for i := 0; i < b.N; i++ {
-//			for _, i := range input {
-//				if value, ok := treeMap.Get(i); !ok {
-//					b.Errorf("want %s got %s", i, value)
-//				}
-//			}
-//		}
-//	})
-//
-//	b.Run("TableMap", func(b *testing.B) {
-//		b.ReportAllocs()
-//		tableMap := newTableMap(b, hits)
-//		for i := 0; i < b.N; i++ {
-//			for _, i := range input {
-//				if value, ok := tableMap.Get(i); !ok {
-//					b.Errorf("want %s got %s", i, value)
-//				}
-//			}
-//		}
-//	})
-//
-//	b.Run("SyncMap", func(b *testing.B) {
-//		b.ReportAllocs()
-//		syncMap := newSyncMap(b, hits)
-//		for i := 0; i < b.N; i++ {
-//			for _, i := range input {
-//				if value, ok := syncMap.Load(i); !ok {
-//					b.Errorf("want %s got %s", i, value)
-//				}
-//			}
-//		}
-//	})
-//}
