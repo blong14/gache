@@ -44,15 +44,14 @@ func RunClient() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	name := "spoke-01"
-
-	resp, err := gio.Register(client, gio.Spoke{Name: name})
-	log.Println(resp, err)
-
-	resp_, _ := gio.SetStatus(client, gio.Spoke{Name: name, Status: "Not OK"})
-	log.Println(resp_, err)
-
-	respx, _ := gio.List(client)
-	log.Println(respx, err)
+	if _, err = gio.Register(client, gio.Spoke{Name: name}); err != nil {
+		log.Println(err)
+	}
+	if _, err = gio.SetStatus(client, gio.Spoke{Name: name, Status: "Not OK"}); err != nil {
+		log.Println(err)
+	}
+	if _, err = gio.List(client); err != nil {
+		log.Println(err)
+	}
 }

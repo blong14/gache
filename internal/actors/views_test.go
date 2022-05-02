@@ -4,8 +4,12 @@ import (
 	"bytes"
 	"context"
 	"testing"
+	"time"
 
 	gactors "github.com/blong14/gache/internal/actors"
+	gcache "github.com/blong14/gache/internal/cache"
+	gtree "github.com/blong14/gache/internal/cache/sorted/treemap"
+	glog "github.com/blong14/gache/logging"
 )
 
 func assertMatch(t *testing.T, want []byte, got []byte) {
@@ -14,15 +18,12 @@ func assertMatch(t *testing.T, want []byte, got []byte) {
 	}
 }
 
-func testGet_Hit(v gactors.ViewActor, expected *gactors.Response) func(t *testing.T) {
+func testGet_Hit(v gactors.Actor, expected *gactors.QueryResponse) func(t *testing.T) {
 	return func(t *testing.T) {
 		t.Parallel()
 		ctx := context.TODO()
-		query := gactors.NewQuery()
-		query.CMD = gactors.GetValue
-		query.Key = expected.Key
-		query.Value = expected.Value
-		go v.Get(context.TODO(), &query)
+		query := gactors.NewGetValueQuery([]byte("default"), expected.Key)
+		go v.Execute(context.TODO(), query)
 		value, ok := query.Result(ctx)
 		if !ok {
 			t.Errorf("not ok %v", query)
@@ -35,9 +36,18 @@ func TestViewActor_Get(t *testing.T) {
 	t.Parallel()
 	// given
 	ctx := context.TODO()
-	v := gactors.NewViewActor()
+	opts := &gcache.TableOpts{
+		WithCache: func() *gtree.TreeMap[[]byte, []byte] {
+			start := time.Now()
+			impl := gtree.New[[]byte, []byte](bytes.Compare)
+			impl.Set([]byte("key"), []byte("value"))
+			glog.Track("startup=%s", time.Since(start))
+			return impl
+		},
+	}
+	v := gactors.NewTableActor(opts)
 	go v.Start(ctx)
-	hit := &gactors.Response{
+	hit := &gactors.QueryResponse{
 		Key:   []byte("key"),
 		Value: []byte("value"),
 	}

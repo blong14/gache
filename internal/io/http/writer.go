@@ -20,6 +20,6 @@ func MustWriteJSON(w stdhttp.ResponseWriter, r *stdhttp.Request, status int, res
 	if _, err := w.Write(jsonResp); err != nil {
 		log.Fatalf("Error happened in writing JSON. Err: %s", err)
 	}
-	glog.Track("method=%s status=%v resp=%v", r.Method, status, resp)
+	glog.Track("method=%s status=%v", r.Method, status)
 	return
 }

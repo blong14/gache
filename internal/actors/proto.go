@@ -2,32 +2,47 @@ package actors
 
 import "context"
 
-type Response struct {
+type InstructionSet int
+
+const (
+	AddTable InstructionSet = iota
+	GetValue
+	SetValue
+)
+
+type QueryHeader struct {
+	TableName []byte
+	Inst      InstructionSet
+}
+
+type QueryResponse struct {
 	Key     []byte
 	Value   []byte
 	Success bool
 }
 
-type RangeQuery struct {
-	Start []byte
-	End   []byte
-}
-
 type Query struct {
-	CMD        InstructionSet
-	Key        []byte
-	Value      []byte
-	RangeQuery *RangeQuery
-	Index      IndexActor
-	done       chan Response
-}
+	Header QueryHeader
+	Key    []byte
+	Value  []byte
 
-func (m *Query) Finish() {
-	close(m.done)
+	done chan QueryResponse
 }
 
 func NewQuery() Query {
-	return Query{done: make(chan Response), RangeQuery: nil}
+	return Query{
+		done: make(chan QueryResponse),
+	}
+}
+
+// OnResult block and waits until the r QueryResponse is read via
+// the Result method
+func (m *Query) OnResult(ctx context.Context, r QueryResponse) {
+	select {
+	case <-ctx.Done():
+		return
+	case m.done <- r:
+	}
 }
 
 // Result blocks and waits for a response on the message's done channel
@@ -41,19 +56,27 @@ func (m *Query) Result(ctx context.Context) ([]byte, bool) {
 	}
 }
 
-// OnResult block and waits until the r Response is read via
-// the Result method
-func (m *Query) OnResult(ctx context.Context, r Response) {
-	select {
-	case <-ctx.Done():
-		return
-	case m.done <- r:
-	}
+func (m *Query) Finish() {
+	close(m.done)
 }
 
-type InstructionSet int
+func NewGetValueQuery(db []byte, key []byte) *Query {
+	query := NewQuery()
+	query.Header = QueryHeader{
+		TableName: db,
+		Inst:      GetValue,
+	}
+	query.Key = key
+	return &query
+}
 
-const (
-	AddIndex InstructionSet = iota
-	GetValue
-)
+func NewSetValueQuery(db []byte, key []byte, value []byte) *Query {
+	query := NewQuery()
+	query.Header = QueryHeader{
+		TableName: db,
+		Inst:      SetValue,
+	}
+	query.Key = key
+	query.Value = value
+	return &query
+}
