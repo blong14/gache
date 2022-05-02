@@ -3,19 +3,16 @@ package io
 import (
 	"context"
 	"encoding/json"
+	gactors "github.com/blong14/gache/internal/actors"
+	ghttp "github.com/blong14/gache/internal/io/http"
+	grpc "github.com/blong14/gache/internal/io/rpc"
 	glog "github.com/blong14/gache/logging"
+	gproxy "github.com/blong14/gache/proxy"
 	"io"
 	"log"
 	"net/http"
 	"net/rpc"
 	"sync"
-	"time"
-
-	gactors "github.com/blong14/gache/internal/actors"
-	genc "github.com/blong14/gache/internal/io/encoding"
-	ghttp "github.com/blong14/gache/internal/io/http"
-	grpc "github.com/blong14/gache/internal/io/rpc"
-	gproxy "github.com/blong14/gache/proxy"
 )
 
 func HealthzService(w http.ResponseWriter, _ *http.Request) {
@@ -26,7 +23,6 @@ func HealthzService(w http.ResponseWriter, _ *http.Request) {
 
 func GetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
 		resp := make(map[string]string)
 		urlQuery := r.URL.Query()
 		if !urlQuery.Has("key") {
@@ -42,7 +38,7 @@ func GetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 		query := gactors.NewGetValueQuery(db, key)
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
-		go qp.Get(ctx, query)
+		go qp.Execute(ctx, query)
 		if value, ok := query.Result(ctx); !ok {
 			resp["error"] = "not found"
 			ghttp.MustWriteJSON(w, r, http.StatusNotFound, resp)
@@ -51,12 +47,12 @@ func GetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 			resp["key"] = string(key)
 			resp["value"] = string(value)
 			ghttp.MustWriteJSON(w, r, http.StatusOK, resp)
-			glog.Track("Get key=%s time=%s", query.Key, time.Since(start))
 		}
 	}
 }
 
 type SetValueRequest struct {
+	Table []byte `json:"table"`
 	Key   []byte `json:"key"`
 	Value []byte `json:"value"`
 }
@@ -77,18 +73,18 @@ func SetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 			ghttp.MustWriteJSON(w, r, http.StatusBadRequest, resp)
 			return
 		}
-		query := gactors.NewQuery()
-		query.Key = req.Key
-		query.Value = req.Value
-		go qp.Set(context.TODO(), &query)
-		if _, ok := query.Result(context.TODO()); !ok {
+		ctx, cancel := context.WithCancel(r.Context())
+		defer cancel()
+		query := gactors.NewSetValueQuery(req.Table, req.Key, req.Value)
+		go qp.Execute(ctx, query)
+		if _, ok := query.Result(ctx); !ok {
 			ghttp.MustWriteJSON(w, r, http.StatusUnprocessableEntity, resp)
-			return
+		} else {
+			resp["status"] = "ok"
+			resp["key"] = string(req.Key)
+			resp["value"] = string(req.Value)
+			ghttp.MustWriteJSON(w, r, http.StatusCreated, resp)
 		}
-		resp["status"] = "ok"
-		resp["key"] = string(req.Key)
-		resp["value"] = string(req.Value)
-		ghttp.MustWriteJSON(w, r, http.StatusCreated, resp)
 	}
 }
 
@@ -143,23 +139,6 @@ type RegisterListResponse struct {
 }
 
 func (r *RegisterService) List(_ *RegisterRequest, resp *RegisterListResponse) error {
-	enc := genc.New()
-	ctx := context.Background()
-	r.Proxy.Range(context.TODO(), func(k any, v any) bool {
-		select {
-		case <-ctx.Done():
-			return false
-		default:
-			var value Spoke
-			enc.Decode(v.([]byte), &value)
-			if enc.HasError() {
-				enc.Reset()
-				return true
-			}
-			resp.Items = append(resp.Items, RegisterResponse{Item: value, Status: value.Status})
-			return true
-		}
-	})
 	resp.Status = "ok"
 	return nil
 }

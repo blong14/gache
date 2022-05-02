@@ -1,7 +1,7 @@
 package cache
 
 import (
-	gtree "github.com/blong14/gache/internal/cache/sorted/tablemap"
+	gtree "github.com/blong14/gache/internal/cache/sorted/treemap"
 )
 
 type Table interface {
@@ -10,7 +10,7 @@ type Table interface {
 }
 
 type DB struct {
-	impl *gtree.TableMap[[]byte, []byte]
+	impl *gtree.TreeMap[[]byte, []byte]
 }
 
 func (db *DB) Get(key []byte) ([]byte, bool) {
@@ -23,11 +23,11 @@ func (db *DB) Set(key []byte, value []byte) {
 
 type TableOpts struct {
 	WithDB    func() *DB
-	WithCache func() *gtree.TableMap[[]byte, []byte]
+	WithCache func() *gtree.TreeMap[[]byte, []byte]
 }
 
 func NewTable(o *TableOpts) Table {
-	var db *gtree.TableMap[[]byte, []byte]
+	var db *gtree.TreeMap[[]byte, []byte]
 	if o.WithCache != nil {
 		db = o.WithCache()
 	}

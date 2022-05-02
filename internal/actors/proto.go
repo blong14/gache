@@ -69,3 +69,14 @@ func NewGetValueQuery(db []byte, key []byte) *Query {
 	query.Key = key
 	return &query
 }
+
+func NewSetValueQuery(db []byte, key []byte, value []byte) *Query {
+	query := NewQuery()
+	query.Header = QueryHeader{
+		TableName: db,
+		Inst:      SetValue,
+	}
+	query.Key = key
+	query.Value = value
+	return &query
+}

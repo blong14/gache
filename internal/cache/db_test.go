@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	gache "github.com/blong14/gache/internal/cache"
-	gtree "github.com/blong14/gache/internal/cache/sorted/tablemap"
+	gtree "github.com/blong14/gache/internal/cache/sorted/treemap"
 )
 
 func TestReader_ViewGet(t *testing.T) {
@@ -14,7 +14,7 @@ func TestReader_ViewGet(t *testing.T) {
 	expected := []byte("value")
 	v := gache.NewTable(
 		&gache.TableOpts{
-			WithCache: func() *gtree.TableMap[[]byte, []byte] {
+			WithCache: func() *gtree.TreeMap[[]byte, []byte] {
 				impl := gtree.New[[]byte, []byte](bytes.Compare)
 				impl.Set(k, expected)
 				return impl
