@@ -21,14 +21,19 @@ func assertMatch(t *testing.T, want []byte, got []byte) {
 func testGet_Hit(v gactors.Actor, expected *gactors.QueryResponse) func(t *testing.T) {
 	return func(t *testing.T) {
 		t.Parallel()
-		ctx := context.TODO()
-		query := gactors.NewGetValueQuery([]byte("default"), expected.Key)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		query, outbox := gactors.NewGetValueQuery([]byte("default"), expected.Key)
 		go v.Execute(context.TODO(), query)
-		value, ok := query.Result(ctx)
-		if !ok {
-			t.Errorf("not ok %v", query)
+		select {
+		case <-ctx.Done():
+			t.Error(ctx.Err())
+		case actual := <-outbox:
+			if !actual.Success {
+				t.Errorf("not ok %v", query)
+			}
+			assertMatch(t, expected.Value, actual.Value)
 		}
-		assertMatch(t, expected.Value, value)
 	}
 }
 

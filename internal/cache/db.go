@@ -22,6 +22,7 @@ func (db *DB) Set(key []byte, value []byte) {
 }
 
 type TableOpts struct {
+	TableName []byte
 	WithDB    func() *DB
 	WithCache func() *gtree.TreeMap[[]byte, []byte]
 }

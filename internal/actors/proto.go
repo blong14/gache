@@ -1,6 +1,9 @@
 package actors
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 type InstructionSet int
 
@@ -9,6 +12,19 @@ const (
 	GetValue
 	SetValue
 )
+
+func (i InstructionSet) String() string {
+	switch i {
+	case AddTable:
+		return "AddTable"
+	case GetValue:
+		return "GetValue"
+	case SetValue:
+		return "SetValue"
+	default:
+		return "unknown"
+	}
+}
 
 type QueryHeader struct {
 	TableName []byte
@@ -22,36 +38,29 @@ type QueryResponse struct {
 }
 
 type Query struct {
+	done   chan struct{}
+	outbox chan *QueryResponse
 	Header QueryHeader
 	Key    []byte
 	Value  []byte
-	done   chan QueryResponse
 }
 
 func NewQuery() Query {
 	return Query{
-		done: make(chan QueryResponse),
+		done:   make(chan struct{}),
+		outbox: make(chan *QueryResponse, 1),
 	}
 }
 
-// OnResult block and waits until the r QueryResponse is read via
-// the Result method
+func (m *Query) String() string {
+	return fmt.Sprintf("%s %s %s", m.Header.TableName, m.Header.Inst, m.Key)
+}
+
 func (m *Query) OnResult(ctx context.Context, r QueryResponse) {
 	select {
 	case <-ctx.Done():
-		return
-	case m.done <- r:
-	}
-}
-
-// Result blocks and waits for a response on the message's done channel
-// and returns a slice of bytes and the message's status
-func (m *Query) Result(ctx context.Context) ([]byte, bool) {
-	select {
-	case <-ctx.Done():
-		return nil, false
-	case resp := <-m.done:
-		return resp.Value, resp.Success
+	case <-m.done:
+	case m.outbox <- &r:
 	}
 }
 
@@ -59,17 +68,17 @@ func (m *Query) Finish() {
 	close(m.done)
 }
 
-func NewGetValueQuery(db []byte, key []byte) *Query {
+func NewGetValueQuery(db []byte, key []byte) (*Query, chan *QueryResponse) {
 	query := NewQuery()
 	query.Header = QueryHeader{
 		TableName: db,
 		Inst:      GetValue,
 	}
 	query.Key = key
-	return &query
+	return &query, query.outbox
 }
 
-func NewSetValueQuery(db []byte, key []byte, value []byte) *Query {
+func NewSetValueQuery(db []byte, key []byte, value []byte) (*Query, chan *QueryResponse) {
 	query := NewQuery()
 	query.Header = QueryHeader{
 		TableName: db,
@@ -77,5 +86,5 @@ func NewSetValueQuery(db []byte, key []byte, value []byte) *Query {
 	}
 	query.Key = key
 	query.Value = value
-	return &query
+	return &query, query.outbox
 }

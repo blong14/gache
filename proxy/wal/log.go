@@ -3,6 +3,7 @@ package wal
 import (
 	"container/list"
 	"context"
+	glog "github.com/blong14/gache/logging"
 
 	gactors "github.com/blong14/gache/internal/actors"
 )
@@ -23,6 +24,7 @@ func New(subs ...gactors.Actor) *WAL {
 }
 
 func (w *WAL) Start(ctx context.Context) {
+	glog.Track("%T waiting for work", w)
 	for _, sub := range w.subscriptions {
 		go sub.Start(ctx)
 	}
