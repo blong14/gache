@@ -16,19 +16,21 @@ type Actor interface {
 
 // implements Actor
 type tableImpl struct {
-	impl  gcache.Table
 	inbox chan *Query
+	impl  gcache.Table
+	name  []byte
 }
 
 func NewTableActor(opts *gcache.TableOpts) Actor {
 	return &tableImpl{
+		name:  opts.TableName,
 		impl:  gcache.NewTable(opts),
 		inbox: make(chan *Query),
 	}
 }
 
 func (va *tableImpl) Start(c context.Context) {
-	glog.Track("%T Waiting for work", va)
+	glog.Track("%T %s waiting for work", va, va.name)
 	for {
 		select {
 		case <-c.Done():
@@ -47,17 +49,23 @@ func (va *tableImpl) Start(c context.Context) {
 						Success: true,
 					}
 				}
-				query.OnResult(c, resp)
+				go func() {
+					defer query.Finish()
+					query.OnResult(c, resp)
+				}()
 			case SetValue:
 				va.impl.Set(query.Key, query.Value)
-				query.OnResult(
-					c,
-					QueryResponse{
-						Key:     query.Key,
-						Value:   query.Value,
-						Success: true,
-					},
-				)
+				go func() {
+					defer query.Finish()
+					query.OnResult(
+						c,
+						QueryResponse{
+							Key:     query.Key,
+							Value:   query.Value,
+							Success: true,
+						},
+					)
+				}()
 			}
 		}
 	}
@@ -87,12 +95,13 @@ var once sync.Once
 
 func (m *metrics) Start(ctx context.Context) {
 	once.Do(func() {
+		glog.Track("%T waiting for work", m)
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case query := <-m.inbox:
-				glog.Track("%#v", query)
+				glog.Track("%s", query)
 			}
 		}
 	})

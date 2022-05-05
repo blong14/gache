@@ -37,7 +37,7 @@ func NewQueryProxy(wal *gwal.WAL) (*QueryProxy, error) {
 }
 
 func (qp *QueryProxy) Start(parentCtx context.Context) {
-	glog.Track("%T Waiting for work", qp)
+	glog.Track("%T waiting for work", qp)
 	ctx, cancel := context.WithCancel(parentCtx)
 	defer cancel()
 	for {
@@ -51,6 +51,7 @@ func (qp *QueryProxy) Start(parentCtx context.Context) {
 			switch query.Header.Inst {
 			case gactor.AddTable:
 				table := gactor.NewTableActor(&gcache.TableOpts{
+					TableName: query.Header.TableName,
 					WithCache: func() *gtree.TreeMap[[]byte, []byte] {
 						start := time.Now()
 						impl := gtree.New[[]byte, []byte](bytes.Compare)
@@ -65,12 +66,16 @@ func (qp *QueryProxy) Start(parentCtx context.Context) {
 				// down the query proxy
 				go table.Start(ctx)
 				qp.tables.Set(query.Header.TableName, table)
-				query.OnResult(ctx, gactor.QueryResponse{
-					Key:     nil,
-					Value:   nil,
-					Success: true,
-				})
+				go func() {
+					defer query.Finish()
+					query.OnResult(ctx, gactor.QueryResponse{
+						Key:     nil,
+						Value:   nil,
+						Success: true,
+					})
+				}()
 			case gactor.GetValue, gactor.SetValue:
+				glog.Track("%v", query)
 				table, ok := qp.tables.Get(query.Header.TableName)
 				if !ok {
 					continue

@@ -30,21 +30,33 @@ func GetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 		if database == "" {
 			database = "default"
 		}
+
 		db := []byte(database)
 		key := []byte(urlQuery.Get("key"))
-		query := gactors.NewGetValueQuery(db, key)
-		defer query.Finish()
+		query, outbox := gactors.NewGetValueQuery(db, key)
+
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
 		go qp.Execute(ctx, query)
-		if value, ok := query.Result(ctx); !ok {
+
+		// wait for results
+		select {
+		case <-r.Context().Done():
 			resp["error"] = "not found"
 			ghttp.MustWriteJSON(w, r, http.StatusNotFound, resp)
-		} else {
-			resp["status"] = "ok"
-			resp["key"] = string(key)
-			resp["value"] = string(value)
-			ghttp.MustWriteJSON(w, r, http.StatusOK, resp)
+		case result, ok := <-outbox:
+			switch {
+			case !ok:
+				ghttp.MustWriteJSON(w, r, http.StatusInternalServerError, resp)
+			case result.Success:
+				resp["status"] = "ok"
+				resp["key"] = string(key)
+				resp["value"] = string(result.Value)
+				ghttp.MustWriteJSON(w, r, http.StatusOK, resp)
+			default:
+				resp["error"] = "not found"
+				ghttp.MustWriteJSON(w, r, http.StatusNotFound, resp)
+			}
 		}
 	}
 }
@@ -65,23 +77,35 @@ func SetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 		}
 		defer func() { _ = body.Close() }()
 		decoder := json.NewDecoder(body)
+
 		var req SetValueRequest
 		if err := decoder.Decode(&req); err != nil {
 			resp["error"] = err.Error()
 			ghttp.MustWriteJSON(w, r, http.StatusBadRequest, resp)
 			return
 		}
+
+		query, outbox := gactors.NewSetValueQuery(req.Table, req.Key, req.Value)
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
-		query := gactors.NewSetValueQuery(req.Table, req.Key, req.Value)
 		go qp.Execute(ctx, query)
-		if _, ok := query.Result(ctx); !ok {
-			ghttp.MustWriteJSON(w, r, http.StatusUnprocessableEntity, resp)
-		} else {
-			resp["status"] = "ok"
-			resp["key"] = string(req.Key)
-			resp["value"] = string(req.Value)
-			ghttp.MustWriteJSON(w, r, http.StatusCreated, resp)
+
+		// wait for results
+		select {
+		case <-r.Context().Done():
+			ghttp.MustWriteJSON(w, r, http.StatusInternalServerError, resp)
+		case result, ok := <-outbox:
+			switch {
+			case !ok:
+				ghttp.MustWriteJSON(w, r, http.StatusInternalServerError, resp)
+			case result.Success:
+				resp["status"] = "ok"
+				resp["key"] = string(req.Key)
+				resp["value"] = string(req.Value)
+				ghttp.MustWriteJSON(w, r, http.StatusCreated, resp)
+			default:
+				ghttp.MustWriteJSON(w, r, http.StatusUnprocessableEntity, resp)
+			}
 		}
 	}
 }
