@@ -67,6 +67,11 @@ func (qp *QueryProxy) Start(parentCtx context.Context) {
 				// down the query proxy
 				go table.Start(ctx)
 				qp.tables.Set(query.Header.TableName, table)
+				query.OnResult(ctx, gactor.QueryResponse{
+					Key:     nil,
+					Value:   nil,
+					Success: true,
+				})
 			case gactor.GetValue, gactor.SetValue:
 				table, ok := qp.tables.Get(query.Header.TableName)
 				if !ok {
@@ -97,12 +102,6 @@ func StartProxy(ctx context.Context, qp *QueryProxy) {
 	onc.Do(func() {
 		log.Println("starting query proxy")
 		go qp.Start(ctx)
-		qp.Execute(ctx, &gactor.Query{
-			Header: gactor.QueryHeader{
-				TableName: []byte("default"),
-				Inst:      gactor.AddTable,
-			},
-		})
 	})
 }
 

@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	gerrors "github.com/blong14/gache/errors"
 	gio "github.com/blong14/gache/internal/io"
 	ghttp "github.com/blong14/gache/internal/io/http"
 	grpc "github.com/blong14/gache/internal/io/rpc"
@@ -41,17 +42,11 @@ func main() {
 
 func RunClient() {
 	client, err := grpc.Client("localhost:8080")
-	if err != nil {
-		log.Fatal(err)
-	}
-	name := "spoke-01"
-	if _, err = gio.Register(client, gio.Spoke{Name: name}); err != nil {
-		log.Println(err)
-	}
-	if _, err = gio.SetStatus(client, gio.Spoke{Name: name, Status: "Not OK"}); err != nil {
-		log.Println(err)
-	}
-	if _, err = gio.List(client); err != nil {
-		log.Println(err)
+	errs := gerrors.Append(
+		err,
+		gerrors.OnlyError(gio.CreateTable(client, []byte("default"))),
+	)
+	if errs.ErrorOrNil() != nil {
+		log.Println(errs)
 	}
 }

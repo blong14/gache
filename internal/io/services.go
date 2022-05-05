@@ -3,16 +3,17 @@ package io
 import (
 	"context"
 	"encoding/json"
-	gactors "github.com/blong14/gache/internal/actors"
-	ghttp "github.com/blong14/gache/internal/io/http"
-	grpc "github.com/blong14/gache/internal/io/rpc"
-	glog "github.com/blong14/gache/logging"
-	gproxy "github.com/blong14/gache/proxy"
+	"errors"
 	"io"
 	"log"
 	"net/http"
 	"net/rpc"
-	"sync"
+
+	gerrors "github.com/blong14/gache/errors"
+	gactors "github.com/blong14/gache/internal/actors"
+	ghttp "github.com/blong14/gache/internal/io/http"
+	grpc "github.com/blong14/gache/internal/io/rpc"
+	gproxy "github.com/blong14/gache/proxy"
 )
 
 func HealthzService(w http.ResponseWriter, _ *http.Request) {
@@ -36,6 +37,7 @@ func GetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 		db := []byte(database)
 		key := []byte(urlQuery.Get("key"))
 		query := gactors.NewGetValueQuery(db, key)
+		defer query.Finish()
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
 		go qp.Execute(ctx, query)
@@ -96,94 +98,49 @@ func HttpHandlers(qp *gproxy.QueryProxy) ghttp.Handler {
 	}
 }
 
-type Spoke struct {
-	Name   string
-	Addr   string
-	Status string
-}
+var ErrNilClient = gerrors.NewGError(errors.New("nil client"))
 
-var (
-	mtx    = new(sync.RWMutex)
-	spokes = map[string]Spoke{}
-)
-
-type RegisterService struct {
+type AddTableService struct {
 	Proxy *gproxy.QueryProxy
 }
 
-type RegisterRequest struct {
-	Item Spoke
+type AddTableRequest struct {
+	TableName []byte
 }
 
-type RegisterResponse struct {
-	Status string
-	Item   Spoke
+type AddTableResponse struct {
+	Success bool
 }
 
-func (r *RegisterService) Register(req *RegisterRequest, resp *RegisterResponse) error {
-	glog.Track("%T not implemeneted", r)
-	return nil
-}
-
-func Register(client *rpc.Client, spoke Spoke) (*RegisterResponse, error) {
-	req := new(RegisterRequest)
-	req.Item = spoke
-	resp := new(RegisterResponse)
-	err := client.Call("RegisterService.Register", req, resp)
-	return resp, err
-}
-
-type RegisterListResponse struct {
-	Items  []RegisterResponse
-	Status string
-}
-
-func (r *RegisterService) List(_ *RegisterRequest, resp *RegisterListResponse) error {
-	resp.Status = "ok"
-	return nil
-}
-
-func List(client *rpc.Client) (*RegisterListResponse, error) {
-	req := new(RegisterRequest)
-	resp := new(RegisterListResponse)
-	err := client.Call("RegisterService.List", req, resp)
-	return resp, err
-}
-
-type StatusService struct{}
-
-type StatusRequest struct {
-	Item Spoke
-}
-
-type StatusResponse struct {
-	Status string
-	Item   Spoke
-}
-
-func (s *StatusService) SetStatus(req *StatusRequest, resp *StatusResponse) error {
-	mtx.Lock()
-	if spoke, ok := spokes[req.Item.Name]; ok {
-		spoke.Status = req.Item.Status
+func (a *AddTableService) Create(req *AddTableRequest, resp *AddTableResponse) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	query := &gactors.Query{
+		Header: gactors.QueryHeader{
+			TableName: req.TableName,
+			Inst:      gactors.AddTable,
+		},
 	}
-	mtx.Unlock()
-	resp.Status = "ok"
+	go a.Proxy.Execute(ctx, query)
+	_, resp.Success = query.Result(ctx)
 	return nil
 }
 
-func SetStatus(client *rpc.Client, spoke Spoke) (*StatusResponse, error) {
-	req := new(StatusRequest)
-	req.Item = spoke
-	resp := new(StatusResponse)
-	err := client.Call("StatusService.SetStatus", req, resp)
+func CreateTable(client *rpc.Client, name []byte) (*AddTableResponse, error) {
+	if client == nil {
+		return nil, ErrNilClient
+	}
+	req := new(AddTableRequest)
+	req.TableName = name
+	resp := new(AddTableResponse)
+	err := gerrors.Append(client.Call("AddTableService.Create", req, resp))
 	return resp, err
 }
 
 func RpcHandlers(proxy *gproxy.QueryProxy) []grpc.Handler {
 	return []grpc.Handler{
-		&RegisterService{
+		&AddTableService{
 			Proxy: proxy,
 		},
-		&StatusService{},
 	}
 }
