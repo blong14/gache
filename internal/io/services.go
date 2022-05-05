@@ -3,16 +3,12 @@ package io
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"log"
 	"net/http"
-	"net/rpc"
 
-	gerrors "github.com/blong14/gache/errors"
 	gactors "github.com/blong14/gache/internal/actors"
 	ghttp "github.com/blong14/gache/internal/io/http"
-	grpc "github.com/blong14/gache/internal/io/rpc"
 	gproxy "github.com/blong14/gache/proxy"
 )
 
@@ -95,52 +91,5 @@ func HttpHandlers(qp *gproxy.QueryProxy) ghttp.Handler {
 		"/healthz": HealthzService,
 		"/get":     ghttp.MustBe(http.MethodGet, GetValueService(qp)),
 		"/set":     ghttp.MustBe(http.MethodPost, SetValueService(qp)),
-	}
-}
-
-var ErrNilClient = gerrors.NewGError(errors.New("nil client"))
-
-type AddTableService struct {
-	Proxy *gproxy.QueryProxy
-}
-
-type AddTableRequest struct {
-	TableName []byte
-}
-
-type AddTableResponse struct {
-	Success bool
-}
-
-func (a *AddTableService) Create(req *AddTableRequest, resp *AddTableResponse) error {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	query := &gactors.Query{
-		Header: gactors.QueryHeader{
-			TableName: req.TableName,
-			Inst:      gactors.AddTable,
-		},
-	}
-	go a.Proxy.Execute(ctx, query)
-	_, resp.Success = query.Result(ctx)
-	return nil
-}
-
-func CreateTable(client *rpc.Client, name []byte) (*AddTableResponse, error) {
-	if client == nil {
-		return nil, ErrNilClient
-	}
-	req := new(AddTableRequest)
-	req.TableName = name
-	resp := new(AddTableResponse)
-	err := gerrors.Append(client.Call("AddTableService.Create", req, resp))
-	return resp, err
-}
-
-func RpcHandlers(proxy *gproxy.QueryProxy) []grpc.Handler {
-	return []grpc.Handler{
-		&AddTableService{
-			Proxy: proxy,
-		},
 	}
 }

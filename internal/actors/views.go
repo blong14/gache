@@ -2,6 +2,8 @@ package actors
 
 import (
 	"context"
+	"sync"
+
 	gcache "github.com/blong14/gache/internal/cache"
 	glog "github.com/blong14/gache/logging"
 )
@@ -70,4 +72,39 @@ func (va *tableImpl) Execute(ctx context.Context, query *Query) {
 
 func (va *tableImpl) Stop(c context.Context) {
 	close(va.inbox)
+}
+
+// implements Actor interface
+type metrics struct {
+	inbox chan *Query
+}
+
+func NewMetricsSubscriber() Actor {
+	return &metrics{}
+}
+
+var once sync.Once
+
+func (m *metrics) Start(ctx context.Context) {
+	once.Do(func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case query := <-m.inbox:
+				glog.Track("%#v", query)
+			}
+		}
+	})
+}
+
+func (m *metrics) Stop(_ context.Context) {
+	close(m.inbox)
+}
+
+func (m *metrics) Execute(ctx context.Context, query *Query) {
+	select {
+	case <-ctx.Done():
+	case m.inbox <- query:
+	}
 }

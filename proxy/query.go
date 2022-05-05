@@ -3,16 +3,20 @@ package proxy
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log"
+	"net/rpc"
 	"strconv"
 	"sync"
 	"time"
 
+	gerrors "github.com/blong14/gache/errors"
 	gactor "github.com/blong14/gache/internal/actors"
 	gcache "github.com/blong14/gache/internal/cache"
 	gtree "github.com/blong14/gache/internal/cache/sorted/treemap"
-	gwal "github.com/blong14/gache/internal/cache/wal"
+	grpc "github.com/blong14/gache/internal/io/rpc"
 	glog "github.com/blong14/gache/logging"
+	gwal "github.com/blong14/gache/proxy/wal"
 )
 
 // QueryProxy implements gactors.Actor interface
@@ -24,10 +28,9 @@ type QueryProxy struct {
 }
 
 // NewQueryProxy returns a fully ready to use *QueryProxy
-// TODO(ben): update signature; remove error
-func NewQueryProxy() (*QueryProxy, error) {
+func NewQueryProxy(wal *gwal.WAL) (*QueryProxy, error) {
 	return &QueryProxy{
-		log:    gwal.New(),
+		log:    wal,
 		inbox:  make(chan *gactor.Query),
 		tables: gtree.New[[]byte, gactor.Actor](bytes.Compare),
 	}, nil
@@ -43,11 +46,6 @@ func (qp *QueryProxy) Start(parentCtx context.Context) {
 			return
 		case query, ok := <-qp.inbox:
 			if !ok {
-				continue
-			}
-			if err := qp.log.Write(query); err != nil {
-				log.Println(err)
-				// TODO(ben): should think about how to handle this better
 				continue
 			}
 			switch query.Header.Inst {
@@ -96,16 +94,115 @@ func (qp *QueryProxy) Execute(ctx context.Context, query *gactor.Query) {
 	}
 }
 
+// implements Actor interface
+type queryReplicator struct {
+	client *rpc.Client
+	errs   *gerrors.Error
+	inbox  chan *gactor.Query
+}
+
+func NewQuerySubscriber(client *rpc.Client) gactor.Actor {
+	return &queryReplicator{
+		client: client,
+		inbox:  make(chan *gactor.Query),
+	}
+}
+
+func (r *queryReplicator) Start(ctx context.Context) {
+	if r.client == nil {
+		var err error
+		r.client, err = grpc.Client("localhost:8080")
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case query := <-r.inbox:
+			r.errs = gerrors.Append(
+				r.errs,
+				gerrors.OnlyError(PublishQuery(r.client, query)),
+			)
+			glog.Track("%#v", r.errs)
+		}
+	}
+}
+
+func (r *queryReplicator) Stop(_ context.Context) {
+	close(r.inbox)
+}
+
+func (r *queryReplicator) Execute(ctx context.Context, query *gactor.Query) {
+	select {
+	case <-ctx.Done():
+	case r.inbox <- query:
+	}
+}
+
 var onc sync.Once
 
 func StartProxy(ctx context.Context, qp *QueryProxy) {
 	onc.Do(func() {
 		log.Println("starting query proxy")
+		go qp.log.Start(ctx)
 		go qp.Start(ctx)
+		qp.Execute(ctx, &gactor.Query{
+			Header: gactor.QueryHeader{
+				TableName: []byte("default"),
+				Inst:      gactor.AddTable,
+			},
+		})
 	})
 }
 
 func StopProxy(ctx context.Context, qp *QueryProxy) {
 	log.Println("stoping query proxy")
 	qp.Stop(ctx)
+}
+
+var ErrNilClient = gerrors.NewGError(errors.New("nil client"))
+
+type QueryService struct {
+	Proxy *QueryProxy
+}
+
+type QueryRequest struct {
+	Queries []*gactor.Query
+}
+
+type QueryResponse struct {
+	Success bool
+}
+
+func (q *QueryService) OnQuery(req *QueryRequest, resp *QueryResponse) error {
+	go func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		for _, query := range req.Queries {
+			q.Proxy.Execute(ctx, query)
+		}
+	}()
+	resp.Success = true
+	return nil
+}
+
+func PublishQuery(client *rpc.Client, queries ...*gactor.Query) (*QueryResponse, error) {
+	if client == nil {
+		return nil, ErrNilClient
+	}
+	req := new(QueryRequest)
+	req.Queries = queries
+	resp := new(QueryResponse)
+	err := gerrors.Append(client.Call("QueryService.OnQuery", req, resp))
+	return resp, err
+}
+
+func RpcHandlers(proxy *QueryProxy) []grpc.Handler {
+	return []grpc.Handler{
+		&QueryService{
+			Proxy: proxy,
+		},
+	}
 }
