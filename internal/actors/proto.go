@@ -25,8 +25,7 @@ type Query struct {
 	Header QueryHeader
 	Key    []byte
 	Value  []byte
-
-	done chan QueryResponse
+	done   chan QueryResponse
 }
 
 func NewQuery() Query {

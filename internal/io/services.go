@@ -3,16 +3,13 @@ package io
 import (
 	"context"
 	"encoding/json"
-	gactors "github.com/blong14/gache/internal/actors"
-	ghttp "github.com/blong14/gache/internal/io/http"
-	grpc "github.com/blong14/gache/internal/io/rpc"
-	glog "github.com/blong14/gache/logging"
-	gproxy "github.com/blong14/gache/proxy"
 	"io"
 	"log"
 	"net/http"
-	"net/rpc"
-	"sync"
+
+	gactors "github.com/blong14/gache/internal/actors"
+	ghttp "github.com/blong14/gache/internal/io/http"
+	gproxy "github.com/blong14/gache/proxy"
 )
 
 func HealthzService(w http.ResponseWriter, _ *http.Request) {
@@ -36,6 +33,7 @@ func GetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 		db := []byte(database)
 		key := []byte(urlQuery.Get("key"))
 		query := gactors.NewGetValueQuery(db, key)
+		defer query.Finish()
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
 		go qp.Execute(ctx, query)
@@ -93,97 +91,5 @@ func HttpHandlers(qp *gproxy.QueryProxy) ghttp.Handler {
 		"/healthz": HealthzService,
 		"/get":     ghttp.MustBe(http.MethodGet, GetValueService(qp)),
 		"/set":     ghttp.MustBe(http.MethodPost, SetValueService(qp)),
-	}
-}
-
-type Spoke struct {
-	Name   string
-	Addr   string
-	Status string
-}
-
-var (
-	mtx    = new(sync.RWMutex)
-	spokes = map[string]Spoke{}
-)
-
-type RegisterService struct {
-	Proxy *gproxy.QueryProxy
-}
-
-type RegisterRequest struct {
-	Item Spoke
-}
-
-type RegisterResponse struct {
-	Status string
-	Item   Spoke
-}
-
-func (r *RegisterService) Register(req *RegisterRequest, resp *RegisterResponse) error {
-	glog.Track("%T not implemeneted", r)
-	return nil
-}
-
-func Register(client *rpc.Client, spoke Spoke) (*RegisterResponse, error) {
-	req := new(RegisterRequest)
-	req.Item = spoke
-	resp := new(RegisterResponse)
-	err := client.Call("RegisterService.Register", req, resp)
-	return resp, err
-}
-
-type RegisterListResponse struct {
-	Items  []RegisterResponse
-	Status string
-}
-
-func (r *RegisterService) List(_ *RegisterRequest, resp *RegisterListResponse) error {
-	resp.Status = "ok"
-	return nil
-}
-
-func List(client *rpc.Client) (*RegisterListResponse, error) {
-	req := new(RegisterRequest)
-	resp := new(RegisterListResponse)
-	err := client.Call("RegisterService.List", req, resp)
-	return resp, err
-}
-
-type StatusService struct{}
-
-type StatusRequest struct {
-	Item Spoke
-}
-
-type StatusResponse struct {
-	Status string
-	Item   Spoke
-}
-
-func (s *StatusService) SetStatus(req *StatusRequest, resp *StatusResponse) error {
-	mtx.Lock()
-	if spoke, ok := spokes[req.Item.Name]; ok {
-		spoke.Status = req.Item.Status
-	}
-	mtx.Unlock()
-	resp.Status = "ok"
-	return nil
-}
-
-func SetStatus(client *rpc.Client, spoke Spoke) (*StatusResponse, error) {
-	req := new(StatusRequest)
-	req.Item = spoke
-	resp := new(StatusResponse)
-	err := client.Call("StatusService.SetStatus", req, resp)
-	return resp, err
-}
-
-func RpcHandlers(proxy *gproxy.QueryProxy) []grpc.Handler {
-	return []grpc.Handler{
-		&RegisterService{
-			Proxy: proxy,
-		},
-		&StatusService{},
 	}
 }

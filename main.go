@@ -7,10 +7,12 @@ import (
 	"os/signal"
 	"syscall"
 
+	gactors "github.com/blong14/gache/internal/actors"
 	gio "github.com/blong14/gache/internal/io"
 	ghttp "github.com/blong14/gache/internal/io/http"
 	grpc "github.com/blong14/gache/internal/io/rpc"
 	gproxy "github.com/blong14/gache/proxy"
+	gwal "github.com/blong14/gache/proxy/wal"
 )
 
 func main() {
@@ -18,40 +20,27 @@ func main() {
 	signal.Notify(sigint, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	qp, err := gproxy.NewQueryProxy()
+
+	wal := gwal.New(
+		gactors.NewMetricsSubscriber(),
+		gproxy.NewQuerySubscriber(nil),
+	)
+	qp, err := gproxy.NewQueryProxy(wal)
 	if err != nil {
 		log.Fatal(err)
 	}
-	go gproxy.StartProxy(ctx, qp)
 
 	rpcSRV := ghttp.Server(":8080")
-	go grpc.Start(rpcSRV, gio.RpcHandlers(qp))
+	go grpc.Start(rpcSRV, gproxy.RpcHandlers(qp))
 
 	httpSRV := ghttp.Server(":8081")
 	go ghttp.Start(httpSRV, gio.HttpHandlers(qp))
 
-	go RunClient()
+	gproxy.StartProxy(ctx, qp)
 
 	s := <-sigint
 	log.Printf("received %s signal\n", s)
 	ghttp.Stop(ctx, httpSRV, rpcSRV)
 	gproxy.StopProxy(ctx, qp)
 	cancel()
-}
-
-func RunClient() {
-	client, err := grpc.Client("localhost:8080")
-	if err != nil {
-		log.Fatal(err)
-	}
-	name := "spoke-01"
-	if _, err = gio.Register(client, gio.Spoke{Name: name}); err != nil {
-		log.Println(err)
-	}
-	if _, err = gio.SetStatus(client, gio.Spoke{Name: name, Status: "Not OK"}); err != nil {
-		log.Println(err)
-	}
-	if _, err = gio.List(client); err != nil {
-		log.Println(err)
-	}
 }

@@ -113,3 +113,7 @@ func Append(err error, errs ...error) *Error {
 		return Append(&Error{}, newErrs...)
 	}
 }
+
+func OnlyError(_ interface{}, err error) *Error {
+	return Append(err)
+}
