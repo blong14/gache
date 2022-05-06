@@ -17,7 +17,7 @@ func Start(srv *http.Server, routes Handler) {
 	for pattern, handler := range routes {
 		http.HandleFunc(pattern, handler)
 	}
-	log.Printf("listing on %s\n", srv.Addr)
+	log.Printf("listening on %s\n", srv.Addr)
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		log.Println(err)
 	}

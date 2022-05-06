@@ -46,7 +46,7 @@ func (qp *QueryProxy) Start(parentCtx context.Context) {
 			return
 		case query, ok := <-qp.inbox:
 			if !ok {
-				continue
+				return
 			}
 			switch query.Header.Inst {
 			case gactor.AddTable:
@@ -62,8 +62,6 @@ func (qp *QueryProxy) Start(parentCtx context.Context) {
 						return impl
 					},
 				})
-				// TOD(Ben): Fix goroutine leak; should make a call to table.Stop(ctx) when shutting
-				// down the query proxy
 				go table.Start(ctx)
 				qp.tables.Set(query.Header.TableName, table)
 				go func() {
@@ -88,8 +86,19 @@ func (qp *QueryProxy) Start(parentCtx context.Context) {
 	}
 }
 
-func (qp *QueryProxy) Stop(_ context.Context) {
+func (qp *QueryProxy) Stop(ctx context.Context) {
+	glog.Track("%T stopping...", qp)
 	close(qp.inbox)
+	qp.log.Stop(ctx)
+	qp.tables.Range(func(_, v any) bool {
+		sub, ok := v.(gactor.Actor)
+		if !ok {
+			return true
+		}
+		sub.Stop(ctx)
+		return true
+	})
+	glog.Track("%T stopped", qp)
 }
 
 func (qp *QueryProxy) Execute(ctx context.Context, query *gactor.Query) {
@@ -114,6 +123,8 @@ func NewQuerySubscriber(client *rpc.Client) gactor.Actor {
 }
 
 func (r *queryReplicator) Start(ctx context.Context) {
+	glog.Track("%T waiting for work", r)
+	defer glog.Track("%T stopped", r)
 	if r.client == nil {
 		var err error
 		r.client, err = grpc.Client("localhost:8080")
@@ -125,7 +136,10 @@ func (r *queryReplicator) Start(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case query := <-r.inbox:
+		case query, ok := <-r.inbox:
+			if !ok {
+				return
+			}
 			r.errs = gerrors.Append(
 				r.errs,
 				gerrors.OnlyError(PublishQuery(r.client, query)),
@@ -136,6 +150,7 @@ func (r *queryReplicator) Start(ctx context.Context) {
 }
 
 func (r *queryReplicator) Stop(_ context.Context) {
+	glog.Track("%T stopping...", r)
 	close(r.inbox)
 }
 
@@ -153,17 +168,14 @@ func StartProxy(ctx context.Context, qp *QueryProxy) {
 		log.Println("starting query proxy")
 		go qp.log.Start(ctx)
 		go qp.Start(ctx)
-		qp.Execute(ctx, &gactor.Query{
-			Header: gactor.QueryHeader{
-				TableName: []byte("default"),
-				Inst:      gactor.AddTable,
-			},
-		})
+		query, done := gactor.NewAddTableQuery([]byte("default"))
+		qp.Execute(ctx, query)
+		<-done
 	})
 }
 
 func StopProxy(ctx context.Context, qp *QueryProxy) {
-	log.Println("stoping query proxy")
+	log.Println("stopping query proxy")
 	qp.Stop(ctx)
 }
 

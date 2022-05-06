@@ -2,8 +2,6 @@ package actors
 
 import (
 	"context"
-	"sync"
-
 	gcache "github.com/blong14/gache/internal/cache"
 	glog "github.com/blong14/gache/logging"
 )
@@ -29,15 +27,21 @@ func NewTableActor(opts *gcache.TableOpts) Actor {
 	}
 }
 
-func (va *tableImpl) Start(c context.Context) {
+func (va *tableImpl) Start(ctx context.Context) {
 	glog.Track("%T %s waiting for work", va, va.name)
+	shouldContinue := true
 	for {
+		if !shouldContinue {
+			break
+		}
 		select {
-		case <-c.Done():
-			return
+		case <-ctx.Done():
+			shouldContinue = false
+			break
 		case query, ok := <-va.inbox:
 			if !ok {
-				return
+				shouldContinue = false
+				break
 			}
 			switch query.Header.Inst {
 			case GetValue:
@@ -51,14 +55,14 @@ func (va *tableImpl) Start(c context.Context) {
 				}
 				go func() {
 					defer query.Finish()
-					query.OnResult(c, resp)
+					query.OnResult(ctx, resp)
 				}()
 			case SetValue:
 				va.impl.Set(query.Key, query.Value)
 				go func() {
 					defer query.Finish()
 					query.OnResult(
-						c,
+						ctx,
 						QueryResponse{
 							Key:     query.Key,
 							Value:   query.Value,
@@ -69,6 +73,7 @@ func (va *tableImpl) Start(c context.Context) {
 			}
 		}
 	}
+	glog.Track("%T %s stopped", va, va.name)
 }
 
 func (va *tableImpl) Execute(ctx context.Context, query *Query) {
@@ -78,42 +83,52 @@ func (va *tableImpl) Execute(ctx context.Context, query *Query) {
 	}
 }
 
-func (va *tableImpl) Stop(c context.Context) {
+func (va *tableImpl) Stop(_ context.Context) {
+	glog.Track("%T %s stopping...", va, va.name)
 	close(va.inbox)
 }
 
 // implements Actor interface
 type metrics struct {
 	inbox chan *Query
+	done  chan struct{}
 }
 
 func NewMetricsSubscriber() Actor {
-	return &metrics{}
+	return &metrics{
+		inbox: make(chan *Query),
+		done:  make(chan struct{}),
+	}
 }
 
-var once sync.Once
-
 func (m *metrics) Start(ctx context.Context) {
-	once.Do(func() {
-		glog.Track("%T waiting for work", m)
-		for {
-			select {
-			case <-ctx.Done():
+	glog.Track("%T waiting for work", m)
+	defer glog.Track("%T stopped", m)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-m.done:
+			return
+		case query, ok := <-m.inbox:
+			if !ok {
 				return
-			case query := <-m.inbox:
-				glog.Track("%s", query)
 			}
+			glog.Track("%s", query)
 		}
-	})
+	}
 }
 
 func (m *metrics) Stop(_ context.Context) {
+	glog.Track("%T stopping...", m)
 	close(m.inbox)
+	close(m.done)
 }
 
 func (m *metrics) Execute(ctx context.Context, query *Query) {
 	select {
 	case <-ctx.Done():
+	case <-m.done:
 	case m.inbox <- query:
 	}
 }

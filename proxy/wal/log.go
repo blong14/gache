@@ -48,10 +48,12 @@ func (w *WAL) onExecute(ctx context.Context, query *gactors.Query) {
 }
 
 func (w *WAL) Stop(ctx context.Context) {
+	glog.Track("%T stopping...", w)
 	for _, sub := range w.subscriptions {
 		sub.Stop(ctx)
 	}
 	close(w.inbox)
+	glog.Track("%T stopped", w)
 }
 
 func (w *WAL) Execute(ctx context.Context, entries ...*gactors.Query) {
