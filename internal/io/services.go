@@ -43,25 +43,27 @@ func GetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 		defer cancel()
 		go qp.Execute(ctx, query)
 
-		// wait for results
+		var status int
 		select {
 		case <-r.Context().Done():
-			resp["error"] = "not found"
-			ghttp.MustWriteJSON(w, r, http.StatusNotFound, resp)
+			glog.Track("%s", r.Context().Err())
+			status = http.StatusInternalServerError
 		case result, ok := <-outbox:
 			switch {
 			case !ok:
-				ghttp.MustWriteJSON(w, r, http.StatusInternalServerError, resp)
+				glog.Track("%s", r.Context().Err())
+				status = http.StatusInternalServerError
 			case result.Success:
 				resp["status"] = "ok"
 				resp["key"] = string(key)
 				resp["value"] = string(result.Value)
-				ghttp.MustWriteJSON(w, r, http.StatusOK, resp)
+				status = http.StatusOK
 			default:
 				resp["error"] = "not found"
-				ghttp.MustWriteJSON(w, r, http.StatusNotFound, resp)
+				status = http.StatusNotFound
 			}
 		}
+		ghttp.MustWriteJSON(w, r, status, resp)
 	}
 }
 

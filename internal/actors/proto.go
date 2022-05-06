@@ -10,6 +10,7 @@ type InstructionSet int
 const (
 	AddTable InstructionSet = iota
 	GetValue
+	Load
 	SetValue
 )
 
@@ -19,6 +20,8 @@ func (i InstructionSet) String() string {
 		return "AddTable"
 	case GetValue:
 		return "GetValue"
+	case Load:
+		return "Load"
 	case SetValue:
 		return "SetValue"
 	default:
@@ -28,6 +31,7 @@ func (i InstructionSet) String() string {
 
 type QueryHeader struct {
 	TableName []byte
+	FileName  []byte
 	Inst      InstructionSet
 }
 
@@ -76,6 +80,16 @@ func NewGetValueQuery(db []byte, key []byte) (*Query, chan *QueryResponse) {
 		Inst:      GetValue,
 	}
 	query.Key = key
+	return &query, query.outbox
+}
+
+func NewLoadFromFileQuery(db []byte, filename []byte) (*Query, chan *QueryResponse) {
+	query := NewQuery()
+	query.Header = QueryHeader{
+		TableName: db,
+		FileName:  filename,
+		Inst:      Load,
+	}
 	return &query, query.outbox
 }
 
