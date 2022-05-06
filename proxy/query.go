@@ -79,6 +79,19 @@ func (qp *QueryProxy) Start(parentCtx context.Context) {
 					continue
 				}
 				go table.Execute(ctx, query)
+			case gactor.Load:
+				loader, ok := qp.tables.Get([]byte("file-loader"))
+				if !ok {
+					loader = gactor.NewFileActor()
+					go loader.Start(ctx)
+					qp.tables.Set([]byte("file-loader"), loader)
+				}
+				go loader.Execute(ctx, query)
+				go func() {
+					for query := range loader.(gactor.Streamer).OnResult() {
+						qp.Execute(ctx, query)
+					}
+				}()
 			default:
 				panic("should not happen")
 			}
@@ -129,7 +142,7 @@ func (r *queryReplicator) Start(ctx context.Context) {
 		var err error
 		r.client, err = grpc.Client("localhost:8080")
 		if err != nil {
-			log.Fatal(err)
+			log.Println(err)
 		}
 	}
 	for {
