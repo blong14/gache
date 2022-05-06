@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	gactors "github.com/blong14/gache/internal/actors"
 	gio "github.com/blong14/gache/internal/io"
@@ -43,4 +44,5 @@ func main() {
 	ghttp.Stop(ctx, httpSRV, rpcSRV)
 	gproxy.StopProxy(ctx, qp)
 	cancel()
+	time.Sleep(500 * time.Millisecond)
 }

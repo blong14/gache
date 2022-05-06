@@ -3,9 +3,11 @@ package io
 import (
 	"context"
 	"encoding/json"
+	glog "github.com/blong14/gache/logging"
 	"io"
 	"log"
 	"net/http"
+	"time"
 
 	gactors "github.com/blong14/gache/internal/actors"
 	ghttp "github.com/blong14/gache/internal/io/http"
@@ -20,6 +22,8 @@ func HealthzService(w http.ResponseWriter, _ *http.Request) {
 
 func GetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		defer func() { glog.Track("get %s", time.Since(start)) }()
 		resp := make(map[string]string)
 		urlQuery := r.URL.Query()
 		if !urlQuery.Has("key") {

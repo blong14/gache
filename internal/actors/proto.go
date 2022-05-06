@@ -66,6 +66,7 @@ func (m *Query) OnResult(ctx context.Context, r QueryResponse) {
 
 func (m *Query) Finish() {
 	close(m.done)
+	close(m.outbox)
 }
 
 func NewGetValueQuery(db []byte, key []byte) (*Query, chan *QueryResponse) {
@@ -86,5 +87,14 @@ func NewSetValueQuery(db []byte, key []byte, value []byte) (*Query, chan *QueryR
 	}
 	query.Key = key
 	query.Value = value
+	return &query, query.outbox
+}
+
+func NewAddTableQuery(db []byte) (*Query, chan *QueryResponse) {
+	query := NewQuery()
+	query.Header = QueryHeader{
+		TableName: db,
+		Inst:      AddTable,
+	}
 	return &query, query.outbox
 }
