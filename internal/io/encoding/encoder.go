@@ -20,7 +20,7 @@ func New() *GCoder {
 }
 
 func (e *GCoder) HasError() bool {
-	return e.Err.ErrorOrNil() == nil
+	return e.Err.ErrorOrNil() != nil
 }
 
 func (e *GCoder) Reset() {

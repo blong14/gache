@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	grepl "github.com/blong14/gache/proxy/replication"
 	"log"
 	"os"
 	"os/signal"
@@ -11,6 +12,8 @@ import (
 	"time"
 
 	gactors "github.com/blong14/gache/internal/actors"
+	gmetrics "github.com/blong14/gache/internal/actors/metrics"
+	grpc "github.com/blong14/gache/internal/io/rpc"
 	gproxy "github.com/blong14/gache/proxy"
 	gwal "github.com/blong14/gache/proxy/wal"
 )
@@ -24,9 +27,14 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	client, err := grpc.Client("localhost:8080")
+	if err != nil {
+		log.Println(err)
+	}
+
 	wal := gwal.New(
-		gactors.NewMetricsSubscriber(),
-		gproxy.NewQuerySubscriber(nil),
+		gmetrics.New(),
+		grepl.New(client),
 	)
 	qp, err := gproxy.NewQueryProxy(wal)
 	if err != nil {
@@ -47,8 +55,8 @@ func main() {
 var done chan struct{}
 
 func Accept(ctx context.Context, qp *gproxy.QueryProxy) {
-	reader := csv.NewReader(os.Stdin)
-	reader.Comma = ' '
+	done = make(chan struct{})
+	time.Sleep(100 * time.Millisecond)
 	for {
 		select {
 		case <-ctx.Done():
@@ -57,6 +65,8 @@ func Accept(ctx context.Context, qp *gproxy.QueryProxy) {
 			return
 		default:
 			fmt.Print("\n% ")
+			reader := csv.NewReader(os.Stdin)
+			reader.Comma = ' '
 			cmd, err := reader.Read()
 			if err != nil {
 				log.Fatal(err)
@@ -67,7 +77,8 @@ func Accept(ctx context.Context, qp *gproxy.QueryProxy) {
 			}
 			go qp.Execute(ctx, query)
 			for result := range done {
-				fmt.Print("% 1.\t", result.Key, result.Value)
+				fmt.Println("% --\tkey\tvalue")
+				fmt.Printf("- 1.\t%s\t%v", string(result.Key), result.Value)
 			}
 		}
 	}
@@ -84,6 +95,8 @@ func toQuery(tokens []string) (*gactors.Query, chan *gactors.QueryResponse) {
 	case "load":
 		data := tokens[1]
 		return gactors.NewLoadFromFileQuery([]byte("default"), []byte(data))
+	case "print":
+		return gactors.NewPrintQuery([]byte("default"))
 	case "set":
 		key := tokens[1]
 		value := tokens[2]

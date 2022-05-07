@@ -8,11 +8,12 @@ import (
 	"syscall"
 	"time"
 
-	gactors "github.com/blong14/gache/internal/actors"
+	gmetrics "github.com/blong14/gache/internal/actors/metrics"
 	gio "github.com/blong14/gache/internal/io"
 	ghttp "github.com/blong14/gache/internal/io/http"
 	grpc "github.com/blong14/gache/internal/io/rpc"
 	gproxy "github.com/blong14/gache/proxy"
+	grepl "github.com/blong14/gache/proxy/replication"
 	gwal "github.com/blong14/gache/proxy/wal"
 )
 
@@ -22,9 +23,14 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	client, err := grpc.Client("localhost:8080")
+	if err != nil {
+		log.Println(err)
+	}
+
 	wal := gwal.New(
-		gactors.NewMetricsSubscriber(),
-		gproxy.NewQuerySubscriber(nil),
+		gmetrics.New(),
+		grepl.New(client),
 	)
 	qp, err := gproxy.NewQueryProxy(wal)
 	if err != nil {

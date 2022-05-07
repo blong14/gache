@@ -13,6 +13,7 @@ func Read(data string) <-chan []string {
 		log.Fatal(err)
 	}
 	csvReader := csv.NewReader(f)
+	csvReader.LazyQuotes = true
 	out := make(chan []string)
 	go func() {
 		defer close(out)
