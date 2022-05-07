@@ -129,24 +129,29 @@ func (t *TreeMap[K, V]) Size() int {
 	return t.count
 }
 
-func stringify(start *mapEntry, level int) {
+func stringify(start *mapEntry, level int, count int) {
+	if count > 20 {
+		return
+	}
 	if start != nil {
 		format := ""
 		for i := 0; i < level; i++ {
-			format += "       "
+			format += "\t"
 		}
-		format += "***> "
+		format += "-->"
 		level++
-		stringify(start.right, level)
+		count++
+		stringify(start.right, level, count)
 		fmt.Printf(format+"%s\n", start.key)
-		stringify(start.left, level)
+		stringify(start.left, level, count)
 	}
 }
 
 func (t *TreeMap[K, V]) Print() {
-	fmt.Println("************************************************")
-	stringify(t.head, 0)
-	fmt.Println("************************************************")
+	fmt.Println(t.Size())
+	// fmt.Println("************************************************")
+	// stringify(t.head, 0, 0)
+	// fmt.Println("************************************************")
 }
 
 type CTreeMap struct {
