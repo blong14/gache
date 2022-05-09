@@ -3,11 +3,12 @@ package proxy
 import (
 	"bytes"
 	"context"
+	gfile "github.com/blong14/gache/internal/actors/file"
 	"log"
 	"sync"
+	"time"
 
 	gactor "github.com/blong14/gache/internal/actors"
-	gfile "github.com/blong14/gache/internal/actors/file"
 	gview "github.com/blong14/gache/internal/actors/view"
 	gcache "github.com/blong14/gache/internal/cache"
 	gtree "github.com/blong14/gache/internal/cache/sorted/treemap"
@@ -62,7 +63,7 @@ func (qp *QueryProxy) Start(parentCtx context.Context) {
 				go table.Start(ctx)
 				qp.tables.Set(query.Header.TableName, table)
 				go func() {
-					defer query.Finish(context.TODO())
+					defer query.Finish(ctx)
 					var result gactor.QueryResponse
 					result.Success = true
 					query.OnResult(ctx, result)
@@ -75,19 +76,18 @@ func (qp *QueryProxy) Start(parentCtx context.Context) {
 				}
 				go table.Execute(ctx, query)
 			case gactor.Load:
-				loader, ok := qp.tables.Get([]byte("file-loader"))
-				if !ok {
-					loader = gfile.New()
-					go loader.Start(ctx)
-					qp.tables.Set([]byte("file-loader"), loader)
-				}
+				loader := gfile.New()
+				glog.Track("%T start %T", qp, loader)
+				go loader.Start(ctx)
 				go loader.Execute(ctx, query)
 				go func() {
+					start := time.Now()
 					for queries := range loader.(gactor.Streamer).OnResult() {
 						for _, query := range queries {
 							go qp.Execute(ctx, query)
 						}
 					}
+					glog.Track("queries=%s", time.Since(start))
 				}()
 			default:
 				query.Finish(ctx)

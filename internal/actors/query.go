@@ -69,6 +69,9 @@ func (m *Query) OnResult(ctx context.Context, r QueryResponse) {
 }
 
 func (m *Query) Finish(ctx context.Context) {
+	if m.outbox == nil {
+		return
+	}
 	select {
 	case <-ctx.Done():
 	default:

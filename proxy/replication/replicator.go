@@ -54,7 +54,12 @@ func (r *queryReplicator) Start(ctx context.Context) {
 			if r.client == nil {
 				continue
 			}
-			queries = append(queries, query)
+			switch query.Header.Inst {
+			case gactors.Load, gactors.Print, gactors.GetValue:
+				continue
+			default:
+				queries = append(queries, query)
+			}
 		}
 	}
 }
