@@ -5,8 +5,8 @@ import (
 )
 
 type Actor interface {
-	Start(c context.Context)
-	Stop(c context.Context)
+	Init(c context.Context)
+	Close(c context.Context)
 	Execute(ctx context.Context, query *Query)
 }
 

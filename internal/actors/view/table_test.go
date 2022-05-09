@@ -52,13 +52,13 @@ func TestViewActor_Get(t *testing.T) {
 		},
 	}
 	v := gview.New(opts)
-	go v.Start(ctx)
+	go v.Init(ctx)
 	hit := &gactors.QueryResponse{
 		Key:   []byte("key"),
 		Value: []byte("value"),
 	}
 	t.Run("hit", testGet_Hit(v, hit))
 	t.Cleanup(func() {
-		v.Stop(ctx)
+		v.Close(ctx)
 	})
 }

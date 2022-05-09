@@ -20,7 +20,7 @@ func New() gactors.Actor {
 	}
 }
 
-func (m *collector) Start(ctx context.Context) {
+func (m *collector) Init(ctx context.Context) {
 	glog.Track("%T waiting for work", m)
 	defer glog.Track("%T stopped", m)
 	for {
@@ -39,7 +39,7 @@ func (m *collector) Start(ctx context.Context) {
 	}
 }
 
-func (m *collector) Stop(_ context.Context) {
+func (m *collector) Close(_ context.Context) {
 	glog.Track("%T stopping...", m)
 	close(m.inbox)
 	close(m.done)

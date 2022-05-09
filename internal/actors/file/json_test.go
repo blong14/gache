@@ -11,9 +11,9 @@ import (
 func TestNew(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	actor := gfile.New()
-	go actor.Start(ctx)
+	go actor.Init(ctx)
 	t.Cleanup(func() {
-		actor.Stop(ctx)
+		actor.Close(ctx)
 		cancel()
 	})
 

@@ -28,7 +28,7 @@ func New(subs ...gactors.Actor) *WAL {
 func (w *WAL) Start(ctx context.Context) {
 	glog.Track("%T waiting for work", w)
 	for _, sub := range w.subscriptions {
-		go sub.Start(ctx)
+		go sub.Init(ctx)
 	}
 	for {
 		select {
@@ -50,7 +50,7 @@ func (w *WAL) Start(ctx context.Context) {
 func (w *WAL) Stop(ctx context.Context) {
 	glog.Track("%T stopping...", w)
 	for _, sub := range w.subscriptions {
-		sub.Stop(ctx)
+		sub.Close(ctx)
 	}
 	close(w.done)
 	close(w.inbox)

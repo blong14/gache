@@ -25,7 +25,7 @@ func New(opts *gcache.TableOpts) gactors.Actor {
 	}
 }
 
-func (va *tableImpl) Start(ctx context.Context) {
+func (va *tableImpl) Init(ctx context.Context) {
 	glog.Track("%T %s waiting for work", va, va.name)
 	defer glog.Track("%T %s stopped", va, va.name)
 	for {
@@ -80,7 +80,7 @@ func (va *tableImpl) Start(ctx context.Context) {
 	}
 }
 
-func (va *tableImpl) Stop(_ context.Context) {
+func (va *tableImpl) Close(_ context.Context) {
 	glog.Track("%T %s stopping...", va, va.name)
 	close(va.done)
 	close(va.inbox)
