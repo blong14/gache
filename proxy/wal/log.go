@@ -52,11 +52,15 @@ func (w *WAL) Stop(ctx context.Context) {
 	for _, sub := range w.subscriptions {
 		sub.Stop(ctx)
 	}
+	close(w.done)
 	close(w.inbox)
 	glog.Track("%T stopped", w)
 }
 
 func (w *WAL) Execute(ctx context.Context, entries ...*gactors.Query) {
+	if w.done == nil || w.inbox == nil {
+		return
+	}
 	select {
 	case <-ctx.Done():
 	case <-w.done:
