@@ -98,6 +98,28 @@ func (t *TreeMap[K, V]) insert(start *mapEntry, key K, value V) *mapEntry {
 	return start
 }
 
+func (t *TreeMap[K, V]) xinsert(key K, value V) *mapEntry {
+	var y *mapEntry
+	for x := t.head; x != nil; {
+		y = x
+		if t.comparator(key, x.key.(K)) < 0 {
+			x = x.left
+		} else {
+			x = x.right
+		}
+	}
+	if y == nil {
+		y = newMapEntry(key, value)
+		t.head = y
+	} else if t.comparator(key, y.key.(K)) < 0 {
+		y.left = newMapEntry(key, value)
+	} else {
+		y.right = newMapEntry(key, value)
+	}
+	t.count++
+	return y
+}
+
 func (t *TreeMap[K, V]) Scan(start K, end K) []V {
 	if t.comparator(end, start) < 0 {
 		return *new([]V)
@@ -122,7 +144,8 @@ func (t *TreeMap[K, V]) Scan(start K, end K) []V {
 }
 
 func (t *TreeMap[K, V]) Set(key K, value V) {
-	t.head = t.insert(t.head, key, value)
+	// t.head = t.insert(t.head, key, value)
+	t.xinsert(key, value)
 }
 
 func (t *TreeMap[K, V]) Size() int {

@@ -9,8 +9,8 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	actor := gfile.New()
 	ctx, cancel := context.WithCancel(context.Background())
+	actor := gfile.New()
 	go actor.Start(ctx)
 	t.Cleanup(func() {
 		actor.Stop(ctx)
@@ -20,12 +20,20 @@ func TestNew(t *testing.T) {
 	query, done := gactors.NewLoadFromFileQuery([]byte("default"), []byte("i.json"))
 	go actor.Execute(ctx, query)
 
+	finished := make(chan struct{})
 	go func(ctx context.Context) {
-		for {
-			select {
-			case <-ctx.Done():
-			case <-actor.OnResult():
+		select {
+		case <-ctx.Done():
+		case queries := <-actor.OnResult():
+			for _, query := range queries {
+				var resp gactors.QueryResponse
+				resp.Key = query.Key
+				resp.Value = query.Value
+				resp.Success = true
+				query.OnResult(ctx, resp)
+				query.Finish(ctx)
 			}
+			close(finished)
 		}
 	}(ctx)
 
@@ -33,4 +41,6 @@ func TestNew(t *testing.T) {
 	if !result.Success {
 		t.Error("data not loaded")
 	}
+
+	<-finished
 }

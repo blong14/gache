@@ -2,7 +2,6 @@ package proxy_test
 
 import (
 	"context"
-	glog "github.com/blong14/gache/logging"
 	"testing"
 	"time"
 
@@ -12,8 +11,7 @@ import (
 )
 
 func TestQueryProxy_Execute(t *testing.T) {
-	// ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	ctx := context.TODO()
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Second)
 	qp, err := gproxy.NewQueryProxy(gwal.New())
 	if err != nil {
 		t.Error(err)
@@ -21,22 +19,43 @@ func TestQueryProxy_Execute(t *testing.T) {
 
 	go gproxy.StartProxy(ctx, qp)
 	t.Cleanup(func() {
-		glog.Track("done")
-		// gproxy.StopProxy(ctx, qp)
-		// cancel()
+		gproxy.StopProxy(ctx, qp)
+		cancel()
 	})
 
 	query, done := gactors.NewLoadFromFileQuery([]byte("default"), []byte("i.json"))
 	go qp.Execute(ctx, query)
 
-	start := time.Now()
 	result := <-done
 	if !result.Success {
 		t.Error("not ok")
 	}
-	t.Log(time.Since(start))
 
 	query, done = gactors.NewPrintQuery([]byte("default"))
 	go qp.Execute(ctx, query)
 	<-done
+}
+
+func BenchmarkNewQueryProxy(b *testing.B) {
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Second)
+	qp, err := gproxy.NewQueryProxy(gwal.New())
+	if err != nil {
+		b.Error(err)
+	}
+	go gproxy.StartProxy(ctx, qp)
+	b.Cleanup(func() {
+		gproxy.StopProxy(ctx, qp)
+		cancel()
+	})
+	b.Run("execute", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			query, done := gactors.NewLoadFromFileQuery([]byte("default"), []byte("i.json"))
+			go qp.Execute(ctx, query)
+			result := <-done
+			if !result.Success {
+				b.Error("not ok")
+			}
+		}
+	})
 }

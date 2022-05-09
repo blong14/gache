@@ -16,4 +16,8 @@ run: lint
 	~/sdk/go1.18/bin/go run github.com/blong14/gache
 
 test: lint
-	~/sdk/go1.18/bin/go test -race ./...
+	~/sdk/go1.18/bin/go test ./...
+
+build: lint
+	~/sdk/go1.18/bin/go build -o $(PWD)/bin/gctl github.com/blong14/gache/cmd/gctl
+	~/sdk/go1.18/bin/go build -o $(PWD)/bin/gache github.com/blong14/gache
