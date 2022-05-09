@@ -35,7 +35,7 @@ func NewQueryProxy(wal *gwal.WAL) (*QueryProxy, error) {
 	}, nil
 }
 
-func (qp *QueryProxy) Start(parentCtx context.Context) {
+func (qp *QueryProxy) Init(parentCtx context.Context) {
 	glog.Track("%T waiting for work", qp)
 	ctx, cancel := context.WithCancel(parentCtx)
 	defer cancel()
@@ -60,7 +60,7 @@ func (qp *QueryProxy) Start(parentCtx context.Context) {
 						TableName: query.Header.TableName,
 					},
 				)
-				go table.Start(ctx)
+				go table.Init(ctx)
 				qp.tables.Set(query.Header.TableName, table)
 				go func() {
 					defer query.Finish(ctx)
@@ -78,7 +78,7 @@ func (qp *QueryProxy) Start(parentCtx context.Context) {
 			case gactor.Load:
 				loader := gfile.New()
 				glog.Track("%T start %T", qp, loader)
-				go loader.Start(ctx)
+				go loader.Init(ctx)
 				go loader.Execute(ctx, query)
 				go func() {
 					start := time.Now()
@@ -96,7 +96,7 @@ func (qp *QueryProxy) Start(parentCtx context.Context) {
 	}
 }
 
-func (qp *QueryProxy) Stop(ctx context.Context) {
+func (qp *QueryProxy) Close(ctx context.Context) {
 	glog.Track("%T stopping...", qp)
 	close(qp.inbox)
 	close(qp.done)
@@ -106,7 +106,7 @@ func (qp *QueryProxy) Stop(ctx context.Context) {
 		if !ok {
 			return true
 		}
-		sub.Stop(ctx)
+		sub.Close(ctx)
 		return true
 	})
 	glog.Track("%T stopped", qp)
@@ -126,7 +126,7 @@ func StartProxy(ctx context.Context, qp *QueryProxy) {
 	onc.Do(func() {
 		log.Println("starting query proxy")
 		go qp.log.Start(ctx)
-		go qp.Start(ctx)
+		go qp.Init(ctx)
 		query, done := gactor.NewAddTableQuery([]byte("default"))
 		qp.Execute(ctx, query)
 		<-done
@@ -135,5 +135,5 @@ func StartProxy(ctx context.Context, qp *QueryProxy) {
 
 func StopProxy(ctx context.Context, qp *QueryProxy) {
 	log.Println("stopping query proxy")
-	qp.Stop(ctx)
+	qp.Close(ctx)
 }

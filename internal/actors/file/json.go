@@ -34,7 +34,7 @@ func New() gactors.Streamer {
 	}
 }
 
-func (f *loader) Start(ctx context.Context) {
+func (f *loader) Init(ctx context.Context) {
 	glog.Track("%T waiting for work", f)
 	defer glog.Track("%T stopped", f)
 	for {
@@ -78,7 +78,7 @@ func (f *loader) Start(ctx context.Context) {
 	}
 }
 
-func (f *loader) Stop(_ context.Context) {
+func (f *loader) Close(_ context.Context) {
 	close(f.done)
 	close(f.inbox)
 	close(f.outbox)

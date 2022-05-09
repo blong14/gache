@@ -26,7 +26,7 @@ func New(client *rpc.Client) gactors.Actor {
 	}
 }
 
-func (r *queryReplicator) Start(ctx context.Context) {
+func (r *queryReplicator) Init(ctx context.Context) {
 	glog.Track("%T waiting for work", r)
 	defer glog.Track("%T stopped", r)
 	ticker := time.NewTicker(5 * time.Millisecond)
@@ -64,7 +64,7 @@ func (r *queryReplicator) Start(ctx context.Context) {
 	}
 }
 
-func (r *queryReplicator) Stop(_ context.Context) {
+func (r *queryReplicator) Close(_ context.Context) {
 	glog.Track("%T stopping...", r)
 	close(r.inbox)
 	close(r.done)
