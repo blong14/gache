@@ -28,6 +28,9 @@ func (sl *SkipList[K, V]) Get(key K) (V, bool) {
 	p := sl.head
 	for p.bottom != sentinal {
 		p = p.bottom
+		if p.right == sentinal {
+			continue
+		}
 		for sl.comparator(key, p.right.key.(K)) >= 0 {
 			p = p.right
 		}

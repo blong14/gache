@@ -55,10 +55,9 @@ func (r *queryReplicator) Init(ctx context.Context) {
 				continue
 			}
 			switch query.Header.Inst {
-			case gactors.Load, gactors.Print, gactors.GetValue:
-				continue
-			default:
+			case gactors.AddTable, gactors.SetValue:
 				queries = append(queries, query)
+			default:
 			}
 		}
 	}

@@ -3,12 +3,11 @@ package proxy
 import (
 	"context"
 	"errors"
-	"net/rpc"
-
 	gerrors "github.com/blong14/gache/errors"
 	gactor "github.com/blong14/gache/internal/actors"
 	grpc "github.com/blong14/gache/internal/io/rpc"
 	glog "github.com/blong14/gache/logging"
+	"net/rpc"
 )
 
 var ErrNilClient = gerrors.NewGError(errors.New("nil client"))
@@ -27,13 +26,14 @@ type QueryResponse struct {
 
 func (q *QueryService) OnQuery(req *QueryRequest, resp *QueryResponse) error {
 	glog.Track("%T %d", req, len(req.Queries))
-	go func() {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		for _, query := range req.Queries {
-			go q.Proxy.Execute(ctx, query)
-		}
-	}()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	for _, query := range req.Queries {
+		q.Proxy.Execute(ctx, query)
+		go func(qry *gactor.Query) {
+			_ = gactor.GetQueryResult(ctx, qry)
+		}(query)
+	}
 	resp.Success = true
 	return nil
 }
