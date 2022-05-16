@@ -89,6 +89,9 @@ func (m *Query) Finish(ctx context.Context) {
 }
 
 func (m *Query) Context() context.Context {
+	if m.ctx == nil {
+		return context.Background()
+	}
 	return m.ctx
 }
 

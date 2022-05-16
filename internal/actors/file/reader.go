@@ -110,8 +110,8 @@ func (f *loader) OnResult() <-chan []*gactors.Query {
 	return out
 }
 
-func (f *loader) Execute(_ context.Context, query *gactors.Query) {
-	spanCtx, span := otel.Tracer("").Start(query.Context(), "query-loader:Execute")
+func (f *loader) Execute(ctx context.Context, query *gactors.Query) {
+	spanCtx, span := otel.Tracer("").Start(ctx, "query-loader:Execute")
 	defer span.End()
 	select {
 	case <-spanCtx.Done():
