@@ -4,17 +4,20 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
-	grepl "github.com/blong14/gache/proxy/replication"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
+
 	gactors "github.com/blong14/gache/internal/actors"
 	gmetrics "github.com/blong14/gache/internal/actors/metrics"
 	grpc "github.com/blong14/gache/internal/io/rpc"
 	gproxy "github.com/blong14/gache/proxy"
+	grepl "github.com/blong14/gache/proxy/replication"
 	gwal "github.com/blong14/gache/proxy/wal"
 )
 
@@ -75,16 +78,19 @@ func Accept(ctx context.Context, qp *gproxy.QueryProxy) {
 			if query == nil || done == nil {
 				return
 			}
+			start := time.Now()
 			go qp.Execute(ctx, query)
 			for result := range done {
 				fmt.Println("% --\tkey\tvalue")
-				fmt.Printf("- 1.\t%s\t%v", string(result.Key), result.Value)
+				fmt.Printf("[%s] 1.\t%s\t%v", time.Since(start), string(result.Key), result.Value)
+				span := trace.SpanFromContext(query.Context())
+				span.End()
 			}
 		}
 	}
 }
 
-func toQuery(tokens []string) (*gactors.Query, chan *gactors.QueryResponse) {
+func toQuery(tokens []string) (*gactors.Query, <-chan *gactors.QueryResponse) {
 	cmd := tokens[0]
 	switch cmd {
 	case "exit":
@@ -94,7 +100,9 @@ func toQuery(tokens []string) (*gactors.Query, chan *gactors.QueryResponse) {
 		return gactors.NewGetValueQuery([]byte("default"), []byte(key))
 	case "load":
 		data := tokens[1]
-		return gactors.NewLoadFromFileQuery([]byte("default"), []byte(data))
+		ctx := context.Background()
+		spanCtx, _ := otel.Tracer("").Start(ctx, "load-from-file")
+		return gactors.TraceNewLoadFromFileQuery(spanCtx, []byte("default"), []byte(data))
 	case "print":
 		return gactors.NewPrintQuery([]byte("default"))
 	case "set":

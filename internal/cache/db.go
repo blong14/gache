@@ -2,12 +2,17 @@ package cache
 
 import (
 	"bytes"
+	"context"
+
+	"go.opentelemetry.io/otel"
+
 	gtree "github.com/blong14/gache/internal/cache/sorted/treemap"
 )
 
 type Table interface {
 	Get(key []byte) ([]byte, bool)
 	Set(key []byte, value []byte)
+	TraceSet(ctx context.Context, key []byte, value []byte)
 	Print()
 }
 
@@ -20,6 +25,12 @@ func (db *DB) Get(key []byte) ([]byte, bool) {
 }
 
 func (db *DB) Set(key []byte, value []byte) {
+	db.impl.Set(key, value)
+}
+
+func (db *DB) TraceSet(ctx context.Context, key []byte, value []byte) {
+	_, span := otel.Tracer("").Start(ctx, "db:set")
+	defer span.End()
 	db.impl.Set(key, value)
 }
 

@@ -2,6 +2,9 @@ package view
 
 import (
 	"context"
+
+	"go.opentelemetry.io/otel"
+
 	gactors "github.com/blong14/gache/internal/actors"
 	gcache "github.com/blong14/gache/internal/cache"
 	glog "github.com/blong14/gache/logging"
@@ -26,7 +29,6 @@ func New(opts *gcache.TableOpts) gactors.Actor {
 
 func (va *tableImpl) Init(ctx context.Context) {
 	glog.Track("%T %s waiting for work", va, va.name)
-	defer glog.Track("%T %s stopped", va, va.name)
 	for {
 		select {
 		case <-ctx.Done():
@@ -40,6 +42,7 @@ func (va *tableImpl) Init(ctx context.Context) {
 				}
 				return
 			}
+			spanCtx, span := otel.Tracer("query-view").Start(query.Context(), "query-view:proxy")
 			switch query.Header.Inst {
 			case gactors.GetValue:
 				var resp gactors.QueryResponse
@@ -50,44 +53,60 @@ func (va *tableImpl) Init(ctx context.Context) {
 						Success: true,
 					}
 				}
-				go func() {
-					defer query.Finish(ctx)
-					query.OnResult(ctx, resp)
-				}()
+				go func(ctx context.Context) {
+					// actor:instruction:indentifier
+					spanCtx, span := otel.Tracer("").Start(ctx, "query-view:gactors.GetValue:OnResult")
+					defer query.Finish(spanCtx)
+					defer span.End()
+					query.OnResult(spanCtx, resp)
+				}(query.Context())
 			case gactors.Print:
 				va.impl.Print()
-				go func() {
-					defer query.Finish(ctx)
+				go func(ctx context.Context) {
+					// actor:instruction:indentifier
+					spanCtx, span := otel.Tracer("").Start(ctx, "query-view:gactors.Print:OnResult")
+					defer query.Finish(spanCtx)
+					defer span.End()
 					var resp gactors.QueryResponse
 					resp.Success = true
-					query.OnResult(ctx, resp)
-				}()
+					query.OnResult(spanCtx, resp)
+				}(query.Context())
 			case gactors.SetValue:
-				va.impl.Set(query.Key, query.Value)
-				go func() {
-					defer query.Finish(ctx)
+				va.impl.TraceSet(spanCtx, query.Key, query.Value)
+				go func(ctx context.Context) {
+					// actor:instruction:indentifier
+					spanCtx, span := otel.Tracer("query-view").Start(ctx, "query-view:gactors.SetValue:OnResult")
+					defer query.Finish(spanCtx)
+					defer span.End()
 					var resp gactors.QueryResponse
 					resp.Key = query.Key
 					resp.Value = query.Value
 					resp.Success = true
-					query.OnResult(ctx, resp)
-				}()
+					query.OnResult(spanCtx, resp)
+				}(spanCtx)
 			default:
 				query.Finish(ctx)
 			}
+			span.End()
 		}
 	}
 }
 
-func (va *tableImpl) Close(_ context.Context) {
-	glog.Track("%T %s stopping...", va, va.name)
+func (va *tableImpl) Close(ctx context.Context) {
+	_, span := otel.Tracer("").Start(ctx, "query-view:Close")
+	defer span.End()
+	if va.done == nil && va.inbox == nil {
+		return
+	}
 	close(va.done)
 	close(va.inbox)
 }
 
 func (va *tableImpl) Execute(ctx context.Context, query *gactors.Query) {
+	spanCtx, span := otel.Tracer("").Start(ctx, "query-view:Execute")
+	defer span.End()
 	select {
-	case <-ctx.Done():
+	case <-spanCtx.Done():
 	case <-va.done:
 	case va.inbox <- query:
 	}

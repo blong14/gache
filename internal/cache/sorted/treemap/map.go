@@ -144,8 +144,8 @@ func (t *TreeMap[K, V]) Scan(start K, end K) []V {
 }
 
 func (t *TreeMap[K, V]) Set(key K, value V) {
-	// t.head = t.insert(t.head, key, value)
-	t.xinsert(key, value)
+	t.head = t.insert(t.head, key, value)
+	// t.xinsert(key, value)
 }
 
 func (t *TreeMap[K, V]) Size() int {

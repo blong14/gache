@@ -4,6 +4,8 @@ import (
 	"container/list"
 	"context"
 
+	"go.opentelemetry.io/otel"
+
 	gactors "github.com/blong14/gache/internal/actors"
 	glog "github.com/blong14/gache/logging"
 )
@@ -38,31 +40,35 @@ func (w *WAL) Start(ctx context.Context) {
 			return
 		case queries := <-w.inbox:
 			for _, query := range queries {
+				spanCtx, span := otel.Tracer("query-wal").Start(query.Context(), "query-wal:proxy")
 				w.impl.PushBack(query)
 				for _, sub := range w.subscriptions {
-					go sub.Execute(ctx, query)
+					go sub.Execute(spanCtx, query)
 				}
+				span.End()
 			}
 		}
 	}
 }
 
 func (w *WAL) Stop(ctx context.Context) {
-	glog.Track("%T stopping...", w)
+	spanCtx, span := otel.Tracer("").Start(ctx, "wal.Stop")
+	defer span.End()
 	for _, sub := range w.subscriptions {
-		sub.Close(ctx)
+		sub.Close(spanCtx)
 	}
 	close(w.done)
 	close(w.inbox)
-	glog.Track("%T stopped", w)
 }
 
 func (w *WAL) Execute(ctx context.Context, entries ...*gactors.Query) {
+	spanCtx, span := otel.Tracer("").Start(ctx, "query-wal.Execute")
+	defer span.End()
 	if w.done == nil || w.inbox == nil {
 		return
 	}
 	select {
-	case <-ctx.Done():
+	case <-spanCtx.Done():
 	case <-w.done:
 	case w.inbox <- entries:
 	}

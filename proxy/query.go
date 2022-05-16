@@ -3,12 +3,13 @@ package proxy
 import (
 	"bytes"
 	"context"
-	gfile "github.com/blong14/gache/internal/actors/file"
 	"log"
 	"sync"
-	"time"
+
+	"go.opentelemetry.io/otel"
 
 	gactor "github.com/blong14/gache/internal/actors"
+	gfile "github.com/blong14/gache/internal/actors/file"
 	gview "github.com/blong14/gache/internal/actors/view"
 	gcache "github.com/blong14/gache/internal/cache"
 	gtree "github.com/blong14/gache/internal/cache/sorted/treemap"
@@ -39,6 +40,7 @@ func (qp *QueryProxy) Init(parentCtx context.Context) {
 	glog.Track("%T waiting for work", qp)
 	ctx, cancel := context.WithCancel(parentCtx)
 	defer cancel()
+	defer func() { glog.Track("%T stopped", qp) }()
 	for {
 		select {
 		case <-ctx.Done():
@@ -52,7 +54,8 @@ func (qp *QueryProxy) Init(parentCtx context.Context) {
 				}
 				return
 			}
-			go qp.log.Execute(ctx, query)
+			spanCtx, span := otel.Tracer("query-proxy").Start(query.Context(), "query-proxy:proxy")
+			qp.log.Execute(spanCtx, query)
 			switch query.Header.Inst {
 			case gactor.AddTable:
 				table := gview.New(
@@ -60,56 +63,62 @@ func (qp *QueryProxy) Init(parentCtx context.Context) {
 						TableName: query.Header.TableName,
 					},
 				)
-				go table.Init(ctx)
+				go table.Init(spanCtx)
 				qp.tables.Set(query.Header.TableName, table)
-				go func() {
-					defer query.Finish(ctx)
+				go func(ctx context.Context) {
+					// actor:instruction:indentifier
+					spanCtx, span := otel.Tracer("").Start(ctx, "query-proxy:gactors.AddTable:OnResult")
+					defer query.Finish(spanCtx)
+					defer span.End()
 					var result gactor.QueryResponse
 					result.Success = true
-					query.OnResult(ctx, result)
-				}()
+					query.OnResult(spanCtx, result)
+				}(spanCtx)
 			case gactor.GetValue, gactor.Print, gactor.SetValue:
+				_, span := otel.Tracer("query-proxy").Start(spanCtx, "query-proxy:get-table")
 				table, ok := qp.tables.Get(query.Header.TableName)
+				span.End()
 				if !ok {
-					query.Finish(ctx)
+					query.Finish(spanCtx)
 					continue
 				}
-				go table.Execute(ctx, query)
+				table.Execute(spanCtx, query)
 			case gactor.Load:
 				loader := gfile.New()
-				glog.Track("%T start %T", qp, loader)
-				go loader.Init(ctx)
-				go loader.Execute(ctx, query)
-				go func() {
-					start := time.Now()
+				go loader.Init(query.Context())
+				go loader.Execute(query.Context(), query)
+				go func(ctx context.Context) {
+					// actor:instruction:indentifier
+					spanCtx, span := otel.Tracer("").Start(ctx, "query-proxy:gactors.Load:OnResult")
+					defer span.End()
 					for queries := range loader.(gactor.Streamer).OnResult() {
 						for _, query := range queries {
-							go qp.Execute(ctx, query)
+							qp.Execute(spanCtx, query)
 						}
 					}
-					glog.Track("queries=%s", time.Since(start))
-				}()
+				}(query.Context())
 			default:
-				query.Finish(ctx)
+				query.Finish(spanCtx)
 			}
+			span.End()
 		}
 	}
 }
 
 func (qp *QueryProxy) Close(ctx context.Context) {
-	glog.Track("%T stopping...", qp)
+	spanCtx, span := otel.Tracer("").Start(ctx, "query-proxy.Close")
+	defer span.End()
 	close(qp.inbox)
 	close(qp.done)
-	qp.log.Stop(ctx)
+	qp.log.Stop(spanCtx)
 	qp.tables.Range(func(_, v any) bool {
 		sub, ok := v.(gactor.Actor)
 		if !ok {
 			return true
 		}
-		sub.Close(ctx)
+		sub.Close(spanCtx)
 		return true
 	})
-	glog.Track("%T stopped", qp)
 }
 
 func (qp *QueryProxy) Execute(ctx context.Context, query *gactor.Query) {
@@ -127,9 +136,11 @@ func StartProxy(ctx context.Context, qp *QueryProxy) {
 		log.Println("starting query proxy")
 		go qp.log.Start(ctx)
 		go qp.Init(ctx)
-		query, done := gactor.NewAddTableQuery([]byte("default"))
-		qp.Execute(ctx, query)
+		spanCtx, span := otel.Tracer("").Start(ctx, "start-proxy:gactors.AddTable:Execute")
+		query, done := gactor.TraceNewAddTableQuery(spanCtx, []byte("default"))
+		qp.Execute(spanCtx, query)
 		<-done
+		span.End()
 	})
 }
 

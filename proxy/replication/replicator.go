@@ -2,12 +2,16 @@ package replication
 
 import (
 	"context"
+	"log"
+	"net/rpc"
+	"time"
+
+	"go.opentelemetry.io/otel"
+
 	gerrors "github.com/blong14/gache/errors"
 	gactors "github.com/blong14/gache/internal/actors"
 	glog "github.com/blong14/gache/logging"
 	gproxy "github.com/blong14/gache/proxy"
-	"net/rpc"
-	"time"
 )
 
 // implements Actor interface
@@ -28,25 +32,12 @@ func New(client *rpc.Client) gactors.Actor {
 
 func (r *queryReplicator) Init(ctx context.Context) {
 	glog.Track("%T waiting for work", r)
-	defer glog.Track("%T stopped", r)
-	ticker := time.NewTicker(5 * time.Millisecond)
-	defer ticker.Stop()
-	queries := make([]*gactors.Query, 0)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-r.done:
 			return
-		case <-ticker.C:
-			if !(len(queries) > 0) {
-				continue
-			}
-			r.errs = gerrors.Append(
-				r.errs,
-				gerrors.OnlyError(gproxy.PublishQuery(r.client, queries...)),
-			)
-			queries = []*gactors.Query{}
 		case query, ok := <-r.inbox:
 			if !ok {
 				return
@@ -54,24 +45,36 @@ func (r *queryReplicator) Init(ctx context.Context) {
 			if r.client == nil {
 				continue
 			}
+			// actor:instruction:indentifier
+			_, span := otel.Tracer("").Start(query.Context(), "query-repl:gactors.Append:Query")
 			switch query.Header.Inst {
 			case gactors.AddTable, gactors.SetValue:
-				queries = append(queries, query)
+				start := time.Now()
+				r.errs = gerrors.Append(
+					r.errs,
+					gerrors.OnlyError(gproxy.PublishQuery(r.client, query)),
+				)
+				log.Printf("%s\n", time.Since(start))
 			default:
 			}
+			span.End()
 		}
 	}
 }
 
-func (r *queryReplicator) Close(_ context.Context) {
-	glog.Track("%T stopping...", r)
+func (r *queryReplicator) Close(ctx context.Context) {
+	_, span := otel.Tracer("").Start(ctx, "query-repl.Close")
+	defer span.End()
 	close(r.inbox)
 	close(r.done)
+	span.End()
 }
 
 func (r *queryReplicator) Execute(ctx context.Context, query *gactors.Query) {
+	spanCtx, span := otel.Tracer("").Start(ctx, "query-repl.Execute")
+	defer span.End()
 	select {
-	case <-ctx.Done():
+	case <-spanCtx.Done():
 	case <-r.done:
 	case r.inbox <- query:
 	}
