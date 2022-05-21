@@ -23,7 +23,7 @@ func TestQueryProxy_Execute(t *testing.T) {
 		cancel()
 	})
 
-	query, done := gactors.NewLoadFromFileQuery([]byte("default"), []byte("j.csv"))
+	query, done := gactors.NewLoadFromFileQuery([]byte("default"), []byte("i.csv"))
 	go qp.Execute(ctx, query)
 
 	result := <-done

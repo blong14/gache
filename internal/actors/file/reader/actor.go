@@ -2,33 +2,23 @@ package reader
 
 import (
 	"context"
-	"log"
-	"sync"
-
 	gactors "github.com/blong14/gache/internal/actors"
-	gjson "github.com/blong14/gache/internal/io/file"
+	gfile "github.com/blong14/gache/internal/io/file"
 	glog "github.com/blong14/gache/internal/logging"
+	"log"
 )
-
-func drain(ctx context.Context, wg *sync.WaitGroup, result <-chan *gactors.QueryResponse) {
-	defer wg.Done()
-	select {
-	case <-ctx.Done():
-	case <-result:
-	}
-}
 
 // implements Actor interface
 type loader struct {
 	done   chan struct{}
 	inbox  chan *gactors.Query
-	outbox chan []*gactors.Query
+	outbox chan []gfile.KeyValue
 }
 
 func New() gactors.Streamer {
 	return &loader{
 		inbox:  make(chan *gactors.Query),
-		outbox: make(chan []*gactors.Query),
+		outbox: make(chan []gfile.KeyValue),
 		done:   make(chan struct{}),
 	}
 }
@@ -48,26 +38,33 @@ func (f *loader) Init(ctx context.Context) {
 				}
 				return
 			}
-			data, err := gjson.ReadCSV(string(query.Header.FileName))
+			data, err := gfile.ReadCSV(string(query.Header.FileName))
 			if err != nil {
 				log.Fatal(err)
 			}
-			var wg sync.WaitGroup
-			buffer := make([]*gactors.Query, 0, len(data))
-			for _, kv := range data {
-				wg.Add(1)
-				setValue, result := gactors.NewSetValueQuery(query.Header.TableName, kv.Key, kv.Value)
-				go drain(ctx, &wg, result)
-				buffer = append(buffer, setValue)
+			buffer := make([]gfile.KeyValue, 0, len(data))
+			for _, d := range data {
+				buffer = append(buffer, d)
+				if len(buffer) >= 1000 {
+					select {
+					case <-ctx.Done():
+					case <-f.done:
+					case f.outbox <- buffer:
+						buffer = []gfile.KeyValue{}
+					}
+				}
 			}
-			select {
-			case <-ctx.Done():
-			case <-f.done:
-			case f.outbox <- buffer:
+			if len(buffer) > 0 {
+				select {
+				case <-ctx.Done():
+				case <-f.done:
+				case f.outbox <- buffer:
+				}
 			}
-			wg.Wait()
 			query.OnResult(ctx, gactors.QueryResponse{Success: true})
 			query.Finish(ctx)
+			f.Close(ctx)
+			return
 		}
 	}
 }
@@ -82,14 +79,25 @@ func (f *loader) OnResult() <-chan []*gactors.Query {
 	out := make(chan []*gactors.Query)
 	go func() {
 		defer close(out)
-		select {
-		case <-f.done:
-			return
-		case data := <-f.outbox:
+		for {
 			select {
 			case <-f.done:
 				return
-			case out <- data:
+			case data := <-f.outbox:
+				buffer := make([]*gactors.Query, 0, len(data))
+				for _, d := range data {
+					query, _ := gactors.NewSetValueQuery(
+						[]byte("default"),
+						d.Key,
+						d.Value,
+					)
+					buffer = append(buffer, query)
+				}
+				select {
+				case <-f.done:
+					return
+				case out <- buffer:
+				}
 			}
 		}
 	}()

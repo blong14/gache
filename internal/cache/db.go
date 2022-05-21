@@ -18,7 +18,8 @@ type Table interface {
 }
 
 type DB struct {
-	impl *gskl.SkipList[[]byte, []byte]
+	ximpl *gtree.TreeMap[[]byte, []byte]
+	impl  *gskl.SkipList[[]byte, []byte]
 }
 
 func (db *DB) Get(key []byte) ([]byte, bool) {
@@ -47,16 +48,17 @@ type TableOpts struct {
 }
 
 func NewTable(o *TableOpts) Table {
-	//if o.WithCache != nil {
-	//	db = o.WithCache()
-	//} else {
-	//	db = gtree.New[[]byte, []byte](bytes.Compare)
-	//}
-	var db *gskl.SkipList[[]byte, []byte]
-	if o.WithSkipList != nil {
-		db = o.WithSkipList()
+	var db *gtree.TreeMap[[]byte, []byte]
+	if o.WithCache != nil {
+		db = o.WithCache()
 	} else {
-		db = gskl.New[[]byte, []byte](bytes.Compare)
+		db = gtree.New[[]byte, []byte](bytes.Compare)
 	}
-	return &DB{impl: db}
+	var xdb *gskl.SkipList[[]byte, []byte]
+	if o.WithSkipList != nil {
+		xdb = o.WithSkipList()
+	} else {
+		xdb = gskl.New[[]byte, []byte](bytes.Compare)
+	}
+	return &DB{ximpl: db, impl: xdb}
 }
