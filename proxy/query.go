@@ -5,23 +5,27 @@ import (
 	"context"
 	"log"
 	"sync"
+	"time"
 
 	"go.opentelemetry.io/otel"
+	"golang.org/x/time/rate"
 
 	gactor "github.com/blong14/gache/internal/actors"
 	gfile "github.com/blong14/gache/internal/actors/file"
 	gview "github.com/blong14/gache/internal/actors/view"
 	gcache "github.com/blong14/gache/internal/cache"
 	gtree "github.com/blong14/gache/internal/cache/sorted/treemap"
+	grate "github.com/blong14/gache/internal/limiter"
 	glog "github.com/blong14/gache/logging"
 	gwal "github.com/blong14/gache/proxy/wal"
 )
 
 // QueryProxy implements gactors.Actor interface
 type QueryProxy struct {
-	inbox chan *gactor.Query
-	done  chan struct{}
-	log   *gwal.WAL
+	inbox   chan *gactor.Query
+	done    chan struct{}
+	log     *gwal.WAL
+	limiter grate.RateLimiter
 	// table name to table actor
 	tables *gtree.TreeMap[[]byte, gactor.Actor]
 }
@@ -29,7 +33,13 @@ type QueryProxy struct {
 // NewQueryProxy returns a fully ready to use *QueryProxy
 func NewQueryProxy(wal *gwal.WAL) (*QueryProxy, error) {
 	return &QueryProxy{
-		log:    wal,
+		log: wal,
+		limiter: grate.MultiLimiter(
+			rate.NewLimiter(
+				grate.Per(1, time.Millisecond),
+				grate.Burst(1),
+			),
+		),
 		inbox:  make(chan *gactor.Query),
 		done:   make(chan struct{}),
 		tables: gtree.New[[]byte, gactor.Actor](bytes.Compare),
@@ -54,8 +64,10 @@ func (qp *QueryProxy) Init(parentCtx context.Context) {
 				}
 				return
 			}
-			spanCtx, span := otel.Tracer("query-proxy").Start(query.Context(), "query-proxy:proxy")
-			qp.log.Execute(spanCtx, query)
+			spanCtx, span := otel.Tracer("query-proxy").Start(
+				query.Context(), "query-proxy:proxy",
+			)
+			go qp.log.Execute(spanCtx, query)
 			switch query.Header.Inst {
 			case gactor.AddTable:
 				table := gview.New(
@@ -63,37 +75,33 @@ func (qp *QueryProxy) Init(parentCtx context.Context) {
 						TableName: query.Header.TableName,
 					},
 				)
-				go table.Init(spanCtx)
+				go table.Init(ctx)
 				qp.tables.Set(query.Header.TableName, table)
 				go func(ctx context.Context) {
-					// actor:instruction:indentifier
-					spanCtx, span := otel.Tracer("").Start(ctx, "query-proxy:gactors.AddTable:OnResult")
 					defer query.Finish(spanCtx)
-					defer span.End()
 					var result gactor.QueryResponse
 					result.Success = true
 					query.OnResult(spanCtx, result)
 				}(spanCtx)
 			case gactor.GetValue, gactor.Print, gactor.SetValue:
-				_, span := otel.Tracer("query-proxy").Start(spanCtx, "query-proxy:get-table")
 				table, ok := qp.tables.Get(query.Header.TableName)
-				span.End()
 				if !ok {
 					query.Finish(spanCtx)
 					continue
 				}
-				table.Execute(spanCtx, query)
+				go table.Execute(spanCtx, query)
 			case gactor.Load:
 				loader := gfile.New()
 				go loader.Init(query.Context())
 				go loader.Execute(query.Context(), query)
 				go func(ctx context.Context) {
-					// actor:instruction:indentifier
-					spanCtx, span := otel.Tracer("").Start(ctx, "query-proxy:gactors.Load:OnResult")
-					defer span.End()
 					for queries := range loader.(gactor.Streamer).OnResult() {
 						for _, query := range queries {
-							qp.Execute(spanCtx, query)
+							if err := qp.limiter.Wait(spanCtx); err != nil {
+								return
+							} else {
+								qp.Execute(spanCtx, query)
+							}
 						}
 					}
 				}(query.Context())
@@ -106,17 +114,15 @@ func (qp *QueryProxy) Init(parentCtx context.Context) {
 }
 
 func (qp *QueryProxy) Close(ctx context.Context) {
-	spanCtx, span := otel.Tracer("").Start(ctx, "query-proxy.Close")
-	defer span.End()
 	close(qp.inbox)
 	close(qp.done)
-	qp.log.Stop(spanCtx)
+	qp.log.Stop(ctx)
 	qp.tables.Range(func(_, v any) bool {
 		sub, ok := v.(gactor.Actor)
 		if !ok {
 			return true
 		}
-		sub.Close(spanCtx)
+		sub.Close(ctx)
 		return true
 	})
 }
@@ -136,11 +142,9 @@ func StartProxy(ctx context.Context, qp *QueryProxy) {
 		log.Println("starting query proxy")
 		go qp.log.Start(ctx)
 		go qp.Init(ctx)
-		spanCtx, span := otel.Tracer("").Start(ctx, "start-proxy:gactors.AddTable:Execute")
-		query, done := gactor.TraceNewAddTableQuery(spanCtx, []byte("default"))
-		qp.Execute(spanCtx, query)
+		query, done := gactor.TraceNewAddTableQuery(ctx, []byte("default"))
+		qp.Execute(ctx, query)
 		<-done
-		span.End()
 	})
 }
 

@@ -23,7 +23,7 @@ func TestQueryProxy_Execute(t *testing.T) {
 		cancel()
 	})
 
-	query, done := gactors.NewLoadFromFileQuery([]byte("default"), []byte("i.csv"))
+	query, done := gactors.NewLoadFromFileQuery([]byte("default"), []byte("j.csv"))
 	go qp.Execute(ctx, query)
 
 	result := <-done
@@ -50,7 +50,7 @@ func BenchmarkNewQueryProxy(b *testing.B) {
 	b.Run("execute", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			query, done := gactors.NewLoadFromFileQuery([]byte("default"), []byte("i.csv"))
+			query, done := gactors.NewLoadFromFileQuery([]byte("default"), []byte("j.csv"))
 			go qp.Execute(ctx, query)
 			result := <-done
 			if !result.Success {
