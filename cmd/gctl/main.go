@@ -17,6 +17,8 @@ import (
 	gwal "github.com/blong14/gache/proxy/wal"
 )
 
+var done chan struct{}
+
 func main() {
 	if err := os.Setenv("DEBUG", "false"); err != nil {
 		log.Fatal(err)
@@ -41,19 +43,24 @@ func main() {
 
 	gproxy.StartProxy(ctx, qp)
 
+	done = make(chan struct{})
 	go Accept(ctx, qp)
 
-	s := <-sigint
+	var s os.Signal
+	select {
+	case sig, ok := <-sigint:
+		if ok {
+			s = sig
+		}
+	case <-done:
+	}
 	log.Printf("received %s signal\n", s)
 	gproxy.StopProxy(ctx, qp)
 	cancel()
 	time.Sleep(500 * time.Millisecond)
 }
 
-var done chan struct{}
-
 func Accept(ctx context.Context, qp *gproxy.QueryProxy) {
-	done = make(chan struct{})
 	time.Sleep(100 * time.Millisecond)
 	for {
 		select {
@@ -69,13 +76,13 @@ func Accept(ctx context.Context, qp *gproxy.QueryProxy) {
 			if err != nil {
 				log.Fatal(err)
 			}
-			query, done := toQuery(cmd)
-			if query == nil || done == nil {
+			query, finished := toQuery(cmd)
+			if query == nil || finished == nil {
 				continue
 			}
 			start := time.Now()
 			qp.Execute(ctx, query)
-			for result := range done {
+			for result := range finished {
 				fmt.Println("% --\tkey\tvalue")
 				fmt.Printf("[%s] 1.\t%s\t%s", time.Since(start), string(result.Key), result.Value)
 			}
