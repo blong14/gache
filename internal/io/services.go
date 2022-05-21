@@ -3,7 +3,6 @@ package io
 import (
 	"context"
 	"encoding/json"
-	glog "github.com/blong14/gache/logging"
 	"io"
 	"log"
 	"net/http"
@@ -11,6 +10,7 @@ import (
 
 	gactors "github.com/blong14/gache/internal/actors"
 	ghttp "github.com/blong14/gache/internal/io/http"
+	glog "github.com/blong14/gache/logging"
 	gproxy "github.com/blong14/gache/proxy"
 )
 

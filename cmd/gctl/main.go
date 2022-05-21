@@ -10,11 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
-
 	gactors "github.com/blong14/gache/internal/actors"
-	gmetrics "github.com/blong14/gache/internal/actors/metrics"
 	grpc "github.com/blong14/gache/internal/io/rpc"
 	gproxy "github.com/blong14/gache/proxy"
 	grepl "github.com/blong14/gache/proxy/replication"
@@ -36,7 +32,6 @@ func main() {
 	}
 
 	wal := gwal.New(
-		gmetrics.New(),
 		grepl.New(client),
 	)
 	qp, err := gproxy.NewQueryProxy(wal)
@@ -76,15 +71,13 @@ func Accept(ctx context.Context, qp *gproxy.QueryProxy) {
 			}
 			query, done := toQuery(cmd)
 			if query == nil || done == nil {
-				return
+				continue
 			}
 			start := time.Now()
-			go qp.Execute(ctx, query)
+			qp.Execute(ctx, query)
 			for result := range done {
 				fmt.Println("% --\tkey\tvalue")
-				fmt.Printf("[%s] 1.\t%s\t%v", time.Since(start), string(result.Key), result.Value)
-				span := trace.SpanFromContext(query.Context())
-				span.End()
+				fmt.Printf("[%s] 1.\t%s\t%s", time.Since(start), string(result.Key), result.Value)
 			}
 		}
 	}
@@ -95,20 +88,20 @@ func toQuery(tokens []string) (*gactors.Query, <-chan *gactors.QueryResponse) {
 	switch cmd {
 	case "exit":
 		close(done)
+		return nil, nil
 	case "get":
 		key := tokens[1]
 		return gactors.NewGetValueQuery([]byte("default"), []byte(key))
 	case "load":
 		data := tokens[1]
-		ctx := context.Background()
-		spanCtx, _ := otel.Tracer("").Start(ctx, "load-from-file")
-		return gactors.TraceNewLoadFromFileQuery(spanCtx, []byte("default"), []byte(data))
+		return gactors.NewLoadFromFileQuery([]byte("default"), []byte(data))
 	case "print":
 		return gactors.NewPrintQuery([]byte("default"))
 	case "set":
 		key := tokens[1]
 		value := tokens[2]
 		return gactors.NewSetValueQuery([]byte("default"), []byte(key), []byte(value))
+	default:
+		return nil, nil
 	}
-	return nil, nil
 }

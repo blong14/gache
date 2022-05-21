@@ -1,7 +1,6 @@
 package sorted_test
 
 import (
-	"bytes"
 	"fmt"
 	"math/rand"
 	"strconv"
@@ -10,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	gskl "github.com/blong14/gache/internal/cache/sorted/skiplist"
 	gtable "github.com/blong14/gache/internal/cache/sorted/tablemap"
 	gtree "github.com/blong14/gache/internal/cache/sorted/treemap"
 )
@@ -41,42 +41,33 @@ func newTreeMap(b *testing.B, hits int) *gtree.TreeMap[string, string] {
 	return tree
 }
 
-func xnewTreeMap(b *testing.B, hits int) *gtree.TreeMap[[]byte, []byte] {
+func newSkipList(b *testing.B, hits int) *gskl.SkipList[string, string] {
 	b.Helper()
-	tree := gtree.New[[]byte, []byte](bytes.Compare)
+	list := gskl.New[string, string](strings.Compare)
 	for i := 0; i < hits; i++ {
-		tree.Set([]byte(strconv.Itoa(i)), []byte(strconv.Itoa(i)))
+		list.Set(strconv.Itoa(i), strconv.Itoa(i))
 	}
-	return tree
-}
-
-func newCTreeMap(b *testing.B, hits int) *gtree.CTreeMap {
-	b.Helper()
-	ctreeMap := gtree.NewCTreeMap()
-	for i := 0; i < hits; i++ {
-		gtree.Set(ctreeMap, strconv.Itoa(i), strconv.Itoa(i))
-	}
-	return ctreeMap
+	return list
 }
 
 func BenchmarkSorted_InsertInOrder(b *testing.B) {
-	hits := 1_000_000
-	b.Run(fmt.Sprintf("CTreeMap_%d", hits), func(b *testing.B) {
-		b.ReportAllocs()
-		ctreeMap := newCTreeMap(b, 0)
-		for i := 0; i < b.N; i++ {
-			for j := 0; j < hits; j++ {
-				gtree.Set(ctreeMap, strconv.Itoa(j), strconv.Itoa(j))
-			}
-		}
-	})
-
+	hits := 100_000
 	b.Run(fmt.Sprintf("TreeMap_%d", hits), func(b *testing.B) {
 		b.ReportAllocs()
 		treeMap := newTreeMap(b, 0)
 		for i := 0; i < b.N; i++ {
 			for j := 0; j < hits; j++ {
 				treeMap.Set(strconv.Itoa(j), strconv.Itoa(j))
+			}
+		}
+	})
+
+	b.Run(fmt.Sprintf("SkipList%d", hits), func(b *testing.B) {
+		b.ReportAllocs()
+		list := newSkipList(b, 0)
+		for i := 0; i < b.N; i++ {
+			for j := 0; j < hits; j++ {
+				list.Set(strconv.Itoa(j), strconv.Itoa(j))
 			}
 		}
 	})
@@ -103,7 +94,7 @@ func BenchmarkSorted_InsertInOrder(b *testing.B) {
 }
 
 func BenchmarkSorted_InsertRandom(b *testing.B) {
-	hits := 1_000_000
+	hits := 100_000
 	random := func(numInts int) []int {
 		source := rand.NewSource(time.Now().UnixNano())
 		generator := rand.New(source)
@@ -115,17 +106,6 @@ func BenchmarkSorted_InsertRandom(b *testing.B) {
 	}
 	input := random(hits)
 
-	b.Run(fmt.Sprintf("CTreeMap_%d", hits), func(b *testing.B) {
-		b.ReportAllocs()
-		ctreeMap := newCTreeMap(b, 0)
-		for i := 0; i < b.N; i++ {
-			for _, j := range input {
-				gtree.Set(ctreeMap, strconv.Itoa(j), strconv.Itoa(j))
-			}
-			b.Log(gtree.Size(ctreeMap))
-		}
-	})
-
 	b.Run(fmt.Sprintf("TreeMap_%d", hits), func(b *testing.B) {
 		b.ReportAllocs()
 		treeMap := newTreeMap(b, 0)
@@ -133,19 +113,26 @@ func BenchmarkSorted_InsertRandom(b *testing.B) {
 			for _, j := range input {
 				treeMap.Set(strconv.Itoa(j), strconv.Itoa(j))
 			}
-			b.Log(treeMap.Size())
+		}
+	})
+
+	b.Run(fmt.Sprintf("SkipList%d", hits), func(b *testing.B) {
+		b.ReportAllocs()
+		list := newSkipList(b, 0)
+		for i := 0; i < b.N; i++ {
+			for _, j := range input {
+				list.Set(strconv.Itoa(j), strconv.Itoa(j))
+			}
 		}
 	})
 
 	b.Run(fmt.Sprintf("TableMap%d", hits), func(b *testing.B) {
-		b.Skipf("TableMap not able to do %d", hits)
 		b.ReportAllocs()
 		tableMap := newTableMap(b, 0)
 		for i := 0; i < b.N; i++ {
 			for _, j := range input {
 				tableMap.Set(strconv.Itoa(j), strconv.Itoa(j))
 			}
-			b.Log(tableMap.Size())
 		}
 	})
 
@@ -161,20 +148,20 @@ func BenchmarkSorted_InsertRandom(b *testing.B) {
 }
 
 func BenchmarkSorted_Append(b *testing.B) {
-	for _, hits := range []int{1_000_000} {
-		b.Run(fmt.Sprintf("CTreeMap_%d", hits), func(b *testing.B) {
-			b.ReportAllocs()
-			ctreeMap := newCTreeMap(b, hits)
-			for i := 0; i < b.N; i++ {
-				gtree.Set(ctreeMap, "99999", "99")
-			}
-		})
-
+	for _, hits := range []int{100_000} {
 		b.Run(fmt.Sprintf("TreeMap_%d", hits), func(b *testing.B) {
 			b.ReportAllocs()
 			treeMap := newTreeMap(b, hits)
 			for i := 0; i < b.N; i++ {
 				treeMap.Set("99999", "99")
+			}
+		})
+
+		b.Run(fmt.Sprintf("SkipList%d", hits), func(b *testing.B) {
+			b.ReportAllocs()
+			skl := newSkipList(b, hits)
+			for i := 0; i < b.N; i++ {
+				skl.Set("99999", "99")
 			}
 		})
 
@@ -197,28 +184,27 @@ func BenchmarkSorted_Append(b *testing.B) {
 }
 
 func BenchmarkSorted_GetRandom(b *testing.B) {
-	hits := 1_000_000
-	input := []string{"0", "250000", "500000", "750000", "999999"}
+	hits := 100_000
+	input := []string{"0", "25000", "50000", "75000", "99999"}
 
-	ctreeMap := newCTreeMap(b, hits)
+	treeMap := newTreeMap(b, hits)
 	for _, key := range input {
-		b.Run(fmt.Sprintf("CTreeMap_%s", key), func(b *testing.B) {
+		b.Run(fmt.Sprintf("TreeMap_%s", key), func(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
-				if value, ok := gtree.Get(ctreeMap, key); !ok {
+				if value, ok := treeMap.Get(key); !ok {
 					b.Errorf("want %s got %s", key, value)
 				}
 			}
 		})
 	}
 
-	treeMap := xnewTreeMap(b, hits)
+	skl := newSkipList(b, hits)
 	for _, key := range input {
-		k := []byte(key)
-		b.Run(fmt.Sprintf("TreeMap_%s", key), func(b *testing.B) {
+		b.Run(fmt.Sprintf("SkipList%s", key), func(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
-				if value, ok := treeMap.Get(k); !ok {
+				if value, ok := skl.Get(key); !ok {
 					b.Errorf("want %s got %s", key, value)
 				}
 			}

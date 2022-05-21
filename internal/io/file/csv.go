@@ -1,9 +1,7 @@
 package file
 
 import (
-	"context"
 	"encoding/csv"
-	"go.opentelemetry.io/otel"
 	"io"
 	"os"
 
@@ -29,13 +27,6 @@ func ReadCSV(data string) ([]KeyValue, error) {
 		out = append(out, KeyValue{Key: []byte(row[0]), Value: []byte(row[1])})
 	}
 	return out, nil
-}
-
-func TraceReadCSV(ctx context.Context, data string) ([]KeyValue, error) {
-	tr := otel.Tracer("")
-	_, span := tr.Start(ctx, "2 read")
-	defer span.End()
-	return ReadCSV(data)
 }
 
 func WriteCSV(data string, keyValues []KeyValue) error {

@@ -2,13 +2,12 @@ package file
 
 import (
 	"context"
+	"log"
+	"sync"
+
 	gactors "github.com/blong14/gache/internal/actors"
 	gjson "github.com/blong14/gache/internal/io/file"
 	glog "github.com/blong14/gache/logging"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
-	"log"
-	"sync"
 )
 
 func drain(ctx context.Context, wg *sync.WaitGroup, result <-chan *gactors.QueryResponse) {
@@ -16,7 +15,6 @@ func drain(ctx context.Context, wg *sync.WaitGroup, result <-chan *gactors.Query
 	select {
 	case <-ctx.Done():
 	case <-result:
-		trace.SpanFromContext(ctx).End()
 	}
 }
 
@@ -50,48 +48,31 @@ func (f *loader) Init(ctx context.Context) {
 				}
 				return
 			}
-			spanCtx, span := otel.Tracer("").Start(query.Context(), "query-reader:Read")
-			data, err := gjson.TraceReadCSV(spanCtx, string(query.Header.FileName))
+			data, err := gjson.ReadCSV(string(query.Header.FileName))
 			if err != nil {
-				span.End()
 				log.Fatal(err)
 			}
 			var wg sync.WaitGroup
 			buffer := make([]*gactors.Query, 0, len(data))
-			tr := otel.Tracer("")
-			for i, kv := range data {
+			for _, kv := range data {
 				wg.Add(1)
-				childCtx, _ := tr.Start(spanCtx, "query-reader:gactors.Load:SetValueQuery")
-				var setValue *gactors.Query
-				var result <-chan *gactors.QueryResponse
-				if (i < 10) || (i > 18765) {
-					setValue, result = gactors.TraceNewSetValueQuery(childCtx, query.Header.TableName, kv.Key, kv.Value)
-				} else {
-					setValue, result = gactors.NewSetValueQuery(query.Header.TableName, kv.Key, kv.Value)
-				}
-				go drain(childCtx, &wg, result)
+				setValue, result := gactors.NewSetValueQuery(query.Header.TableName, kv.Key, kv.Value)
+				go drain(ctx, &wg, result)
 				buffer = append(buffer, setValue)
 			}
-			go func(ctx context.Context) {
-				spanCtx, span := tr.Start(ctx, "query-reader:gactors.Load:OnResult")
-				defer span.End()
-				defer query.Finish(spanCtx)
-				wg.Wait()
-				query.OnResult(spanCtx, gactors.QueryResponse{Success: true})
-			}(spanCtx)
 			select {
 			case <-ctx.Done():
 			case <-f.done:
 			case f.outbox <- buffer:
 			}
-			span.End()
+			wg.Wait()
+			query.OnResult(ctx, gactors.QueryResponse{Success: true})
+			query.Finish(ctx)
 		}
 	}
 }
 
-func (f *loader) Close(ctx context.Context) {
-	_, span := otel.Tracer("").Start(ctx, "query-loader:Close")
-	defer span.End()
+func (f *loader) Close(_ context.Context) {
 	close(f.done)
 	close(f.inbox)
 	close(f.outbox)
@@ -104,17 +85,20 @@ func (f *loader) OnResult() <-chan []*gactors.Query {
 		select {
 		case <-f.done:
 			return
-		case out <- <-f.outbox:
+		case data := <-f.outbox:
+			select {
+			case <-f.done:
+				return
+			case out <- data:
+			}
 		}
 	}()
 	return out
 }
 
 func (f *loader) Execute(ctx context.Context, query *gactors.Query) {
-	spanCtx, span := otel.Tracer("").Start(ctx, "query-loader:Execute")
-	defer span.End()
 	select {
-	case <-spanCtx.Done():
+	case <-ctx.Done():
 	case <-f.done:
 	case f.inbox <- query:
 	}

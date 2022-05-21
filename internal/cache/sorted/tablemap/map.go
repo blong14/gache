@@ -125,10 +125,10 @@ func (c *TableMap[K, V]) insertSort(index int, el *mapEntry) {
 
 // Set sets a key value pair in the map
 func (c *TableMap[K, V]) Set(key K, value V) {
-	/*if c.greaterthan(key, uint(c.Size()-1)) {
+	if c.greaterthan(key, uint(c.Size()-1)) {
 		c.insertLast(newMapEntry(key, value))
 		return
-	}*/
+	}
 	index := c.search(key)
 	if c.equalto(key, uint(index)) {
 		c.impl[index] = newMapEntry(key, value)

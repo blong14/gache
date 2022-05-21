@@ -45,39 +45,30 @@ func (va *tableImpl) Init(ctx context.Context) {
 			spanCtx, span := otel.Tracer("query-view").Start(query.Context(), "query-view:proxy")
 			switch query.Header.Inst {
 			case gactors.GetValue:
-				var resp gactors.QueryResponse
-				if value, ok := va.impl.Get(query.Key); ok {
-					resp = gactors.QueryResponse{
-						Key:     query.Key,
-						Value:   value,
-						Success: true,
-					}
-				}
 				go func(ctx context.Context) {
-					// actor:instruction:indentifier
-					spanCtx, span := otel.Tracer("").Start(ctx, "query-view:gactors.GetValue:OnResult")
+					var resp gactors.QueryResponse
+					if value, ok := va.impl.Get(query.Key); ok {
+						resp = gactors.QueryResponse{
+							Key:     query.Key,
+							Value:   value,
+							Success: true,
+						}
+					}
 					defer query.Finish(spanCtx)
-					defer span.End()
 					query.OnResult(spanCtx, resp)
 				}(query.Context())
 			case gactors.Print:
-				va.impl.Print()
 				go func(ctx context.Context) {
-					// actor:instruction:indentifier
-					spanCtx, span := otel.Tracer("").Start(ctx, "query-view:gactors.Print:OnResult")
+					va.impl.Print()
 					defer query.Finish(spanCtx)
-					defer span.End()
 					var resp gactors.QueryResponse
 					resp.Success = true
 					query.OnResult(spanCtx, resp)
 				}(query.Context())
 			case gactors.SetValue:
-				va.impl.TraceSet(spanCtx, query.Key, query.Value)
 				go func(ctx context.Context) {
-					// actor:instruction:indentifier
-					spanCtx, span := otel.Tracer("query-view").Start(ctx, "query-view:gactors.SetValue:OnResult")
+					va.impl.TraceSet(spanCtx, query.Key, query.Value)
 					defer query.Finish(spanCtx)
-					defer span.End()
 					var resp gactors.QueryResponse
 					resp.Key = query.Key
 					resp.Value = query.Value
@@ -92,9 +83,7 @@ func (va *tableImpl) Init(ctx context.Context) {
 	}
 }
 
-func (va *tableImpl) Close(ctx context.Context) {
-	_, span := otel.Tracer("").Start(ctx, "query-view:Close")
-	defer span.End()
+func (va *tableImpl) Close(_ context.Context) {
 	if va.done == nil && va.inbox == nil {
 		return
 	}
@@ -103,10 +92,11 @@ func (va *tableImpl) Close(ctx context.Context) {
 }
 
 func (va *tableImpl) Execute(ctx context.Context, query *gactors.Query) {
-	spanCtx, span := otel.Tracer("").Start(ctx, "query-view:Execute")
-	defer span.End()
+	if va.inbox == nil {
+		return
+	}
 	select {
-	case <-spanCtx.Done():
+	case <-ctx.Done():
 	case <-va.done:
 	case va.inbox <- query:
 	}

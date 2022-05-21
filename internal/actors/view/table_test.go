@@ -9,8 +9,7 @@ import (
 	gactors "github.com/blong14/gache/internal/actors"
 	gview "github.com/blong14/gache/internal/actors/view"
 	gcache "github.com/blong14/gache/internal/cache"
-	gtree "github.com/blong14/gache/internal/cache/sorted/treemap"
-	glog "github.com/blong14/gache/logging"
+	gskl "github.com/blong14/gache/internal/cache/sorted/skiplist"
 )
 
 func assertMatch(t *testing.T, want []byte, got []byte) {
@@ -43,11 +42,9 @@ func TestViewActor_Get(t *testing.T) {
 	// given
 	ctx := context.TODO()
 	opts := &gcache.TableOpts{
-		WithCache: func() *gtree.TreeMap[[]byte, []byte] {
-			start := time.Now()
-			impl := gtree.New[[]byte, []byte](bytes.Compare)
+		WithSkipList: func() *gskl.SkipList[[]byte, []byte] {
+			impl := gskl.New[[]byte, []byte](bytes.Compare)
 			impl.Set([]byte("key"), []byte("value"))
-			glog.Track("startup=%s", time.Since(start))
 			return impl
 		},
 	}

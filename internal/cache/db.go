@@ -6,6 +6,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 
+	gskl "github.com/blong14/gache/internal/cache/sorted/skiplist"
 	gtree "github.com/blong14/gache/internal/cache/sorted/treemap"
 )
 
@@ -17,7 +18,7 @@ type Table interface {
 }
 
 type DB struct {
-	impl *gtree.TreeMap[[]byte, []byte]
+	impl *gskl.SkipList[[]byte, []byte]
 }
 
 func (db *DB) Get(key []byte) ([]byte, bool) {
@@ -39,17 +40,23 @@ func (db *DB) Print() {
 }
 
 type TableOpts struct {
-	TableName []byte
-	WithDB    func() *DB
-	WithCache func() *gtree.TreeMap[[]byte, []byte]
+	TableName    []byte
+	WithDB       func() *DB
+	WithCache    func() *gtree.TreeMap[[]byte, []byte]
+	WithSkipList func() *gskl.SkipList[[]byte, []byte]
 }
 
 func NewTable(o *TableOpts) Table {
-	var db *gtree.TreeMap[[]byte, []byte]
-	if o.WithCache != nil {
-		db = o.WithCache()
+	//if o.WithCache != nil {
+	//	db = o.WithCache()
+	//} else {
+	//	db = gtree.New[[]byte, []byte](bytes.Compare)
+	//}
+	var db *gskl.SkipList[[]byte, []byte]
+	if o.WithSkipList != nil {
+		db = o.WithSkipList()
 	} else {
-		db = gtree.New[[]byte, []byte](bytes.Compare)
+		db = gskl.New[[]byte, []byte](bytes.Compare)
 	}
 	return &DB{impl: db}
 }
