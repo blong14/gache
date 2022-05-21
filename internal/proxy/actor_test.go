@@ -30,10 +30,6 @@ func TestQueryProxy_Execute(t *testing.T) {
 	if !result.Success {
 		t.Error("not ok")
 	}
-
-	query, done = gactors.NewPrintQuery([]byte("default"))
-	go qp.Execute(ctx, query)
-	<-done
 }
 
 func BenchmarkNewQueryProxy(b *testing.B) {
