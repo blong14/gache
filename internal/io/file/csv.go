@@ -5,7 +5,7 @@ import (
 	"io"
 	"os"
 
-	gerrors "github.com/blong14/gache/errors"
+	gerrors "github.com/blong14/gache/internal/errors"
 )
 
 func ReadCSV(data string) ([]KeyValue, error) {

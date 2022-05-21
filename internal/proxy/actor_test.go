@@ -6,8 +6,8 @@ import (
 	"time"
 
 	gactors "github.com/blong14/gache/internal/actors"
-	gproxy "github.com/blong14/gache/proxy"
-	gwal "github.com/blong14/gache/proxy/wal"
+	gproxy "github.com/blong14/gache/internal/proxy"
+	gwal "github.com/blong14/gache/internal/wal"
 )
 
 func TestQueryProxy_Execute(t *testing.T) {

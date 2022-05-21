@@ -7,7 +7,7 @@ import (
 
 	gactors "github.com/blong14/gache/internal/actors"
 	gcache "github.com/blong14/gache/internal/cache"
-	glog "github.com/blong14/gache/logging"
+	glog "github.com/blong14/gache/internal/logging"
 )
 
 // implements Actor

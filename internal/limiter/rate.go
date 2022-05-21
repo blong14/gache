@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/time/rate"
 
-	gerrors "github.com/blong14/gache/errors"
+	gerrors "github.com/blong14/gache/internal/errors"
 )
 
 type RateLimiter interface {

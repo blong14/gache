@@ -7,7 +7,7 @@ import (
 	"go.opentelemetry.io/otel"
 
 	gactors "github.com/blong14/gache/internal/actors"
-	glog "github.com/blong14/gache/logging"
+	glog "github.com/blong14/gache/internal/logging"
 )
 
 // WAL implements gactors.Actor

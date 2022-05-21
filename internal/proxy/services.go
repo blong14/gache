@@ -7,13 +7,14 @@ import (
 	"net/rpc"
 	"time"
 
-	gerrors "github.com/blong14/gache/errors"
-	gactor "github.com/blong14/gache/internal/actors"
-	grpc "github.com/blong14/gache/internal/io/rpc"
-	grate "github.com/blong14/gache/internal/limiter"
-	glog "github.com/blong14/gache/logging"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+
+	gactor "github.com/blong14/gache/internal/actors"
+	gerrors "github.com/blong14/gache/internal/errors"
+	grpc "github.com/blong14/gache/internal/io/rpc"
+	grate "github.com/blong14/gache/internal/limiter"
+	glog "github.com/blong14/gache/internal/logging"
 )
 
 var ErrNilClient = gerrors.NewGError(errors.New("nil client"))

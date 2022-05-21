@@ -1,16 +1,16 @@
-package file_test
+package reader_test
 
 import (
 	"context"
 	"testing"
 
 	gactors "github.com/blong14/gache/internal/actors"
-	gfile "github.com/blong14/gache/internal/actors/file"
+	greader "github.com/blong14/gache/internal/actors/file/reader"
 )
 
 func TestNew(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	actor := gfile.New()
+	actor := greader.New()
 	go actor.Init(ctx)
 	t.Cleanup(func() {
 		actor.Close(ctx)

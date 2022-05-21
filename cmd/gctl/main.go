@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	grepl "github.com/blong14/gache/internal/actors/replication"
+	gproxy "github.com/blong14/gache/internal/proxy"
+	gwal "github.com/blong14/gache/internal/wal"
 	"log"
 	"os"
 	"os/signal"
@@ -12,9 +15,6 @@ import (
 
 	gactors "github.com/blong14/gache/internal/actors"
 	grpc "github.com/blong14/gache/internal/io/rpc"
-	gproxy "github.com/blong14/gache/proxy"
-	grepl "github.com/blong14/gache/proxy/replication"
-	gwal "github.com/blong14/gache/proxy/wal"
 )
 
 var done chan struct{}

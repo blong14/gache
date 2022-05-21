@@ -3,7 +3,6 @@ package actors
 import (
 	"context"
 	"fmt"
-	"go.opentelemetry.io/otel"
 )
 
 type QueryInstruction int
@@ -125,12 +124,6 @@ func NewLoadFromFileQuery(db []byte, filename []byte) (*Query, <-chan *QueryResp
 	return &query, query.outbox
 }
 
-func TraceNewLoadFromFileQuery(ctx context.Context, db []byte, filename []byte) (*Query, <-chan *QueryResponse) {
-	query, outbox := NewLoadFromFileQuery(db, filename)
-	query.ctx = ctx
-	return query, outbox
-}
-
 func NewSetValueQuery(db []byte, key []byte, value []byte) (*Query, <-chan *QueryResponse) {
 	ctx := context.Background()
 	query := TraceNewQuery(ctx)
@@ -143,12 +136,6 @@ func NewSetValueQuery(db []byte, key []byte, value []byte) (*Query, <-chan *Quer
 	return &query, query.outbox
 }
 
-func TraceNewSetValueQuery(ctx context.Context, db []byte, key []byte, value []byte) (*Query, <-chan *QueryResponse) {
-	query, outbox := NewSetValueQuery(db, key, value)
-	query.ctx = ctx
-	return query, outbox
-}
-
 func NewAddTableQuery(db []byte) (*Query, <-chan *QueryResponse) {
 	query := NewQuery()
 	query.Header = QueryHeader{
@@ -158,19 +145,7 @@ func NewAddTableQuery(db []byte) (*Query, <-chan *QueryResponse) {
 	return &query, query.outbox
 }
 
-func TraceNewAddTableQuery(ctx context.Context, db []byte) (*Query, <-chan *QueryResponse) {
-	query := NewQuery()
-	query.ctx = ctx
-	query.Header = QueryHeader{
-		TableName: db,
-		Inst:      AddTable,
-	}
-	return &query, query.outbox
-}
-
 func GetQueryResult(ctx context.Context, query *Query) *QueryResponse {
-	_, span := otel.Tracer("").Start(ctx, "query:GetQueryResult")
-	defer span.End()
 	var result *QueryResponse
 	select {
 	case <-ctx.Done():

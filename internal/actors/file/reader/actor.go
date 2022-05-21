@@ -1,4 +1,4 @@
-package file
+package reader
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 
 	gactors "github.com/blong14/gache/internal/actors"
 	gjson "github.com/blong14/gache/internal/io/file"
-	glog "github.com/blong14/gache/logging"
+	glog "github.com/blong14/gache/internal/logging"
 )
 
 func drain(ctx context.Context, wg *sync.WaitGroup, result <-chan *gactors.QueryResponse) {

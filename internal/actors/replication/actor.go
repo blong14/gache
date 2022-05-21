@@ -4,10 +4,10 @@ import (
 	"context"
 	"net/rpc"
 
-	gerrors "github.com/blong14/gache/errors"
 	gactors "github.com/blong14/gache/internal/actors"
-	glog "github.com/blong14/gache/logging"
-	gproxy "github.com/blong14/gache/proxy"
+	gerrors "github.com/blong14/gache/internal/errors"
+	glog "github.com/blong14/gache/internal/logging"
+	gproxy "github.com/blong14/gache/internal/proxy"
 )
 
 // implements Actor interface

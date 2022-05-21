@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 
-	"github.com/blong14/gache/errors"
+	"github.com/blong14/gache/internal/errors"
 )
 
 type GCoder struct {

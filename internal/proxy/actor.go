@@ -11,13 +11,13 @@ import (
 	"golang.org/x/time/rate"
 
 	gactor "github.com/blong14/gache/internal/actors"
-	gfile "github.com/blong14/gache/internal/actors/file"
+	gfile "github.com/blong14/gache/internal/actors/file/reader"
 	gview "github.com/blong14/gache/internal/actors/view"
 	gcache "github.com/blong14/gache/internal/cache"
 	gtree "github.com/blong14/gache/internal/cache/sorted/treemap"
 	grate "github.com/blong14/gache/internal/limiter"
-	glog "github.com/blong14/gache/logging"
-	gwal "github.com/blong14/gache/proxy/wal"
+	glog "github.com/blong14/gache/internal/logging"
+	gwal "github.com/blong14/gache/internal/wal"
 )
 
 // QueryProxy implements gactors.Actor interface
@@ -142,7 +142,7 @@ func StartProxy(ctx context.Context, qp *QueryProxy) {
 		log.Println("starting query proxy")
 		go qp.log.Start(ctx)
 		go qp.Init(ctx)
-		query, done := gactor.TraceNewAddTableQuery(ctx, []byte("default"))
+		query, done := gactor.NewAddTableQuery([]byte("default"))
 		qp.Execute(ctx, query)
 		<-done
 	})
