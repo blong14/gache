@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"log"
 
-	glog "github.com/blong14/gache/logging"
 	stdhttp "net/http"
+
+	glog "github.com/blong14/gache/internal/logging"
 )
 
 func MustWriteJSON(w stdhttp.ResponseWriter, r *stdhttp.Request, status int, resp map[string]string) {

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 
-	gerrors "github.com/blong14/gache/errors"
+	gerrors "github.com/blong14/gache/internal/errors"
 )
 
 func ReadJSON(data string) ([]KeyValue, error) {

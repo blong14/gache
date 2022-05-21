@@ -1,9 +1,5 @@
 package treemap
 
-// #cgo CFLAGS: -g -Wall
-// #include "treemap.h"
-import "C"
-
 import (
 	"fmt"
 )
@@ -98,28 +94,6 @@ func (t *TreeMap[K, V]) insert(start *mapEntry, key K, value V) *mapEntry {
 	return start
 }
 
-func (t *TreeMap[K, V]) xinsert(key K, value V) *mapEntry {
-	var y *mapEntry
-	for x := t.head; x != nil; {
-		y = x
-		if t.comparator(key, x.key.(K)) < 0 {
-			x = x.left
-		} else {
-			x = x.right
-		}
-	}
-	if y == nil {
-		y = newMapEntry(key, value)
-		t.head = y
-	} else if t.comparator(key, y.key.(K)) < 0 {
-		y.left = newMapEntry(key, value)
-	} else {
-		y.right = newMapEntry(key, value)
-	}
-	t.count++
-	return y
-}
-
 func (t *TreeMap[K, V]) Scan(start K, end K) []V {
 	if t.comparator(end, start) < 0 {
 		return *new([]V)
@@ -144,8 +118,7 @@ func (t *TreeMap[K, V]) Scan(start K, end K) []V {
 }
 
 func (t *TreeMap[K, V]) Set(key K, value V) {
-	// t.head = t.insert(t.head, key, value)
-	t.xinsert(key, value)
+	t.head = t.insert(t.head, key, value)
 }
 
 func (t *TreeMap[K, V]) Size() int {
@@ -175,37 +148,4 @@ func (t *TreeMap[K, V]) Print() {
 	// fmt.Println("************************************************")
 	// stringify(t.head, 0, 0)
 	// fmt.Println("************************************************")
-}
-
-type CTreeMap struct {
-	head  *C.MapEntry
-	count int
-}
-
-func NewCTreeMap() *CTreeMap {
-	return &CTreeMap{}
-}
-
-func Get(tm *CTreeMap, key string) (string, bool) {
-	k := C.CString(key)
-	entry := (*C.MapEntry)(C.get((*C.MapEntry)(tm.head), (*C.char)(k)))
-	if entry == nil || entry.value == nil {
-		return "", false
-	}
-	return C.GoString(entry.value), true
-}
-
-func Range(tm *CTreeMap, fnc func(k, v any) bool) {
-
-}
-
-func Set(tm *CTreeMap, key, value string) {
-	k := C.CString(key)
-	v := C.CString(value)
-	tm.head = C.set(tm.head, (*C.char)(k), (*C.char)(v))
-	tm.count++
-}
-
-func Size(tm *CTreeMap) int {
-	return tm.count
 }

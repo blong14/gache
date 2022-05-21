@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
-	grepl "github.com/blong14/gache/proxy/replication"
+	grepl "github.com/blong14/gache/internal/actors/replication"
+	gproxy "github.com/blong14/gache/internal/proxy"
+	gwal "github.com/blong14/gache/internal/wal"
 	"log"
 	"os"
 	"os/signal"
@@ -12,11 +14,10 @@ import (
 	"time"
 
 	gactors "github.com/blong14/gache/internal/actors"
-	gmetrics "github.com/blong14/gache/internal/actors/metrics"
 	grpc "github.com/blong14/gache/internal/io/rpc"
-	gproxy "github.com/blong14/gache/proxy"
-	gwal "github.com/blong14/gache/proxy/wal"
 )
+
+var done chan struct{}
 
 func main() {
 	if err := os.Setenv("DEBUG", "false"); err != nil {
@@ -33,7 +34,6 @@ func main() {
 	}
 
 	wal := gwal.New(
-		gmetrics.New(),
 		grepl.New(client),
 	)
 	qp, err := gproxy.NewQueryProxy(wal)
@@ -43,19 +43,24 @@ func main() {
 
 	gproxy.StartProxy(ctx, qp)
 
+	done = make(chan struct{})
 	go Accept(ctx, qp)
 
-	s := <-sigint
+	var s os.Signal
+	select {
+	case sig, ok := <-sigint:
+		if ok {
+			s = sig
+		}
+	case <-done:
+	}
 	log.Printf("received %s signal\n", s)
 	gproxy.StopProxy(ctx, qp)
 	cancel()
 	time.Sleep(500 * time.Millisecond)
 }
 
-var done chan struct{}
-
 func Accept(ctx context.Context, qp *gproxy.QueryProxy) {
-	done = make(chan struct{})
 	time.Sleep(100 * time.Millisecond)
 	for {
 		select {
@@ -71,24 +76,26 @@ func Accept(ctx context.Context, qp *gproxy.QueryProxy) {
 			if err != nil {
 				log.Fatal(err)
 			}
-			query, done := toQuery(cmd)
-			if query == nil || done == nil {
-				return
+			query, finished := toQuery(cmd)
+			if query == nil || finished == nil {
+				continue
 			}
-			go qp.Execute(ctx, query)
-			for result := range done {
+			start := time.Now()
+			qp.Execute(ctx, query)
+			for result := range finished {
 				fmt.Println("% --\tkey\tvalue")
-				fmt.Printf("- 1.\t%s\t%v", string(result.Key), result.Value)
+				fmt.Printf("[%s] 1.\t%s\t%s", time.Since(start), string(result.Key), result.Value)
 			}
 		}
 	}
 }
 
-func toQuery(tokens []string) (*gactors.Query, chan *gactors.QueryResponse) {
+func toQuery(tokens []string) (*gactors.Query, <-chan *gactors.QueryResponse) {
 	cmd := tokens[0]
 	switch cmd {
 	case "exit":
 		close(done)
+		return nil, nil
 	case "get":
 		key := tokens[1]
 		return gactors.NewGetValueQuery([]byte("default"), []byte(key))
@@ -101,6 +108,7 @@ func toQuery(tokens []string) (*gactors.Query, chan *gactors.QueryResponse) {
 		key := tokens[1]
 		value := tokens[2]
 		return gactors.NewSetValueQuery([]byte("default"), []byte(key), []byte(value))
+	default:
+		return nil, nil
 	}
-	return nil, nil
 }
