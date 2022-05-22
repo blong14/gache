@@ -40,15 +40,13 @@ func (m *collector) Init(ctx context.Context) {
 }
 
 func (m *collector) Close(_ context.Context) {
-	glog.Track("%T stopping...", m)
-	close(m.inbox)
 	close(m.done)
 }
 
 func (m *collector) Execute(ctx context.Context, query *gactors.Query) {
 	select {
-	case <-ctx.Done():
 	case <-m.done:
+	case <-ctx.Done():
 	case m.inbox <- query:
 	}
 }

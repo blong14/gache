@@ -9,6 +9,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	actor := greader.New()
 	go actor.Init(ctx)

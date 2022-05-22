@@ -56,6 +56,15 @@ func (qp *QueryProxy) Init(parentCtx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-qp.done:
+			qp.log.Stop(ctx)
+			qp.tables.Range(func(_, v any) bool {
+				sub, ok := v.(gactor.Actor)
+				if !ok {
+					return true
+				}
+				sub.Close(ctx)
+				return true
+			})
 			return
 		case query, ok := <-qp.inbox:
 			if !ok {
@@ -72,7 +81,8 @@ func (qp *QueryProxy) Init(parentCtx context.Context) {
 			case gactor.AddTable:
 				table := gview.New(
 					&gcache.TableOpts{
-						TableName: query.Header.TableName,
+						Concurrent: true,
+						TableName:  query.Header.TableName,
 					},
 				)
 				go table.Init(ctx)
@@ -97,7 +107,10 @@ func (qp *QueryProxy) Init(parentCtx context.Context) {
 				go func(ctx context.Context) {
 					for queries := range loader.(gactor.Streamer).OnResult() {
 						for _, query := range queries {
-							qp.Execute(spanCtx, query)
+							if query == nil {
+								continue
+							}
+							go qp.Execute(spanCtx, query)
 							_ = gactor.GetQueryResult(spanCtx, query)
 						}
 					}
@@ -110,24 +123,14 @@ func (qp *QueryProxy) Init(parentCtx context.Context) {
 	}
 }
 
-func (qp *QueryProxy) Close(ctx context.Context) {
-	close(qp.inbox)
+func (qp *QueryProxy) Close(_ context.Context) {
 	close(qp.done)
-	qp.log.Stop(ctx)
-	qp.tables.Range(func(_, v any) bool {
-		sub, ok := v.(gactor.Actor)
-		if !ok {
-			return true
-		}
-		sub.Close(ctx)
-		return true
-	})
 }
 
 func (qp *QueryProxy) Execute(ctx context.Context, query *gactor.Query) {
 	select {
-	case <-ctx.Done():
 	case <-qp.done:
+	case <-ctx.Done():
 	case qp.inbox <- query:
 	}
 }
@@ -142,6 +145,7 @@ func StartProxy(ctx context.Context, qp *QueryProxy) {
 		query, done := gactor.NewAddTableQuery([]byte("default"))
 		qp.Execute(ctx, query)
 		<-done
+		log.Println("default table added")
 	})
 }
 

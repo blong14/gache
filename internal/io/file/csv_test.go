@@ -7,6 +7,7 @@ import (
 )
 
 func TestReadCSV(t *testing.T) {
+	t.Parallel()
 	data, err := gfile.ReadCSV("i.csv")
 	if err != nil {
 		t.Error(err)

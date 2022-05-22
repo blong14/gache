@@ -7,15 +7,13 @@ import (
 )
 
 func TestReadJSON(t *testing.T) {
+	t.Parallel()
 	data, err := gfile.ReadJSON("i.json")
 	if err != nil {
 		t.Error(err)
 	}
 	if len(data) == 0 {
 		t.Error("value is nil")
-	}
-	if err := gfile.WriteCSV("i.csv", data); err != nil {
-		t.Error(err)
 	}
 }
 

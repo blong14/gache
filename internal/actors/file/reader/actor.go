@@ -71,8 +71,6 @@ func (f *loader) Init(ctx context.Context) {
 
 func (f *loader) Close(_ context.Context) {
 	close(f.done)
-	close(f.inbox)
-	close(f.outbox)
 }
 
 func (f *loader) OnResult() <-chan []*gactors.Query {
@@ -106,8 +104,8 @@ func (f *loader) OnResult() <-chan []*gactors.Query {
 
 func (f *loader) Execute(ctx context.Context, query *gactors.Query) {
 	select {
-	case <-ctx.Done():
 	case <-f.done:
+	case <-ctx.Done():
 	case f.inbox <- query:
 	}
 }

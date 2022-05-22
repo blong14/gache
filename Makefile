@@ -4,7 +4,8 @@ init:
 
 # ~/sdk/go1.18/bin/go test sync -cpu=1 -bench=BenchmarkLoad -benchmem -run=XXX
 bench: clean
-	~/sdk/go1.18/bin/go test -cpu=2,4,8 -parallel=2 -bench=BenchmarkConcurrent -run=XXX ./...
+	~/sdk/go1.18/bin/go test -race -cpu=2 -bench=BenchmarkConcurrent -run=XXX ./internal/cache/sorted/treemap/...
+	~/sdk/go1.18/bin/go test -cpu=1,2,4,6,8 -bench=BenchmarkConcurrent -run=XXX ./...
 
 docs:
 	~/sdk/go1.18/bin/go doc -all
@@ -19,8 +20,8 @@ run: lint
 	~/sdk/go1.18/bin/go run github.com/blong14/gache
 
 test:
-	~/sdk/go1.18/bin/go test ./...
+	~/sdk/go1.18/bin/go test -race -cpu=8 -parallel=8 ./...
 
-build: init lint
+build: init
 	~/sdk/go1.18/bin/go build -o $(PWD)/bin/gctl github.com/blong14/gache/cmd/gctl
 	~/sdk/go1.18/bin/go build -o $(PWD)/bin/gache github.com/blong14/gache

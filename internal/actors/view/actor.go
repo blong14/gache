@@ -12,18 +12,20 @@ import (
 
 // implements Actor
 type tableImpl struct {
-	inbox chan *gactors.Query
-	done  chan struct{}
-	impl  gcache.Table
-	name  []byte
+	concurrent bool
+	inbox      chan *gactors.Query
+	done       chan struct{}
+	impl       gcache.Table
+	name       []byte
 }
 
 func New(opts *gcache.TableOpts) gactors.Actor {
 	return &tableImpl{
-		name:  opts.TableName,
-		impl:  gcache.NewTable(opts),
-		inbox: make(chan *gactors.Query),
-		done:  make(chan struct{}),
+		concurrent: opts.Concurrent,
+		name:       opts.TableName,
+		impl:       gcache.NewTable(opts),
+		inbox:      make(chan *gactors.Query),
+		done:       make(chan struct{}),
 	}
 }
 
@@ -42,10 +44,11 @@ func (va *tableImpl) Init(ctx context.Context) {
 				}
 				return
 			}
-			spanCtx, span := otel.Tracer("query-view").Start(query.Context(), "query-view:proxy")
+			spanCtx, span := otel.Tracer("query-view").Start(
+				query.Context(), "query-view:proxy")
 			switch query.Header.Inst {
 			case gactors.GetValue:
-				go func(ctx context.Context) {
+				get := func(ctx context.Context) {
 					defer query.Finish(spanCtx)
 					var resp gactors.QueryResponse
 					if value, ok := va.impl.Get(query.Key); ok {
@@ -56,7 +59,12 @@ func (va *tableImpl) Init(ctx context.Context) {
 						}
 					}
 					query.OnResult(spanCtx, resp)
-				}(query.Context())
+				}
+				if va.concurrent {
+					go get(query.Context())
+				} else {
+					get(query.Context())
+				}
 			case gactors.Print:
 				go func(ctx context.Context) {
 					defer query.Finish(spanCtx)
@@ -66,7 +74,7 @@ func (va *tableImpl) Init(ctx context.Context) {
 					query.OnResult(spanCtx, resp)
 				}(query.Context())
 			case gactors.SetValue:
-				go func(ctx context.Context) {
+				set := func(ctx context.Context) {
 					defer query.Finish(spanCtx)
 					va.impl.TraceSet(spanCtx, query.Key, query.Value)
 					var resp gactors.QueryResponse
@@ -74,7 +82,13 @@ func (va *tableImpl) Init(ctx context.Context) {
 					resp.Value = query.Value
 					resp.Success = true
 					query.OnResult(spanCtx, resp)
-				}(spanCtx)
+				}
+				if va.concurrent {
+					glog.Track("concurrent")
+					go set(query.Context())
+				} else {
+					set(query.Context())
+				}
 			default:
 				query.Finish(ctx)
 			}
@@ -84,20 +98,13 @@ func (va *tableImpl) Init(ctx context.Context) {
 }
 
 func (va *tableImpl) Close(_ context.Context) {
-	if va.done == nil && va.inbox == nil {
-		return
-	}
 	close(va.done)
-	close(va.inbox)
 }
 
 func (va *tableImpl) Execute(ctx context.Context, query *gactors.Query) {
-	if va.inbox == nil {
-		return
-	}
 	select {
-	case <-ctx.Done():
 	case <-va.done:
+	case <-ctx.Done():
 	case va.inbox <- query:
 	}
 }

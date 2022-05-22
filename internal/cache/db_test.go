@@ -9,6 +9,7 @@ import (
 )
 
 func TestReader_ViewGet(t *testing.T) {
+	t.Parallel()
 	// given
 	k := []byte("key")
 	expected := []byte("value")

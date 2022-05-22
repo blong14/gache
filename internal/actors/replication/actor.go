@@ -54,17 +54,13 @@ func (r *queryReplicator) Init(ctx context.Context) {
 }
 
 func (r *queryReplicator) Close(_ context.Context) {
-	if r.inbox == nil || r.done == nil {
-		return
-	}
-	close(r.inbox)
 	close(r.done)
 }
 
 func (r *queryReplicator) Execute(ctx context.Context, query *gactors.Query) {
 	select {
-	case <-ctx.Done():
 	case <-r.done:
+	case <-ctx.Done():
 	case r.inbox <- query:
 	}
 }

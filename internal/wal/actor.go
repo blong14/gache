@@ -37,6 +37,9 @@ func (w *WAL) Start(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-w.done:
+			for _, sub := range w.subscriptions {
+				sub.Close(ctx)
+			}
 			return
 		case queries, ok := <-w.inbox:
 			if !ok {
@@ -56,21 +59,14 @@ func (w *WAL) Start(ctx context.Context) {
 	}
 }
 
-func (w *WAL) Stop(ctx context.Context) {
-	for _, sub := range w.subscriptions {
-		sub.Close(ctx)
-	}
+func (w *WAL) Stop(_ context.Context) {
 	close(w.done)
-	close(w.inbox)
 }
 
 func (w *WAL) Execute(ctx context.Context, entries ...*gactors.Query) {
-	if w.done == nil || w.inbox == nil {
-		return
-	}
 	select {
-	case <-ctx.Done():
 	case <-w.done:
+	case <-ctx.Done():
 	case w.inbox <- entries:
 	}
 }
