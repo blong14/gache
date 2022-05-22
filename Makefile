@@ -2,9 +2,9 @@ init:
 	~/sdk/go1.18/bin/go mod tidy
 	~/sdk/go1.18/bin/go mod vendor
 
+# ~/sdk/go1.18/bin/go test sync -cpu=1 -bench=BenchmarkLoad -benchmem -run=XXX
 bench: clean
-	~/sdk/go1.18/bin/go test sync -cpu=1 -bench=BenchmarkLoad -benchmem -run=XXX
-	~/sdk/go1.18/bin/go test -v -cpu=1 -bench=Sorted -run=XXX ./...
+	~/sdk/go1.18/bin/go test -cpu=2,4,8 -parallel=2 -bench=BenchmarkConcurrent -run=XXX ./...
 
 docs:
 	~/sdk/go1.18/bin/go doc -all

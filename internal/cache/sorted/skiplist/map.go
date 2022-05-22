@@ -124,7 +124,7 @@ func (sl *SkipList[K, V]) Set(key K, value V) {
 			if m == nil {
 				continue loop
 			}
-			for m.TryLock() {
+			if m.TryLock() {
 				m.Unlock()
 				continue loop
 			}

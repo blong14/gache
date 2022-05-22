@@ -136,7 +136,7 @@ func benchMap(b *testing.B, bench bench) {
 	})
 }
 
-func BenchmarkTableMap_LoadMostlyHits(b *testing.B) {
+func BenchmarkConcurrent_LoadMostlyHits(b *testing.B) {
 	const hits, misses = 1023, 1
 
 	benchMap(b, bench{
@@ -158,7 +158,7 @@ func BenchmarkTableMap_LoadMostlyHits(b *testing.B) {
 
 }
 
-func BenchmarkTableMap_LoadOrStoreBalanced(b *testing.B) {
+func BenchmarkConcurrent_LoadOrStoreBalanced(b *testing.B) {
 	const hits, misses = 128, 128
 
 	benchMap(b, bench{
@@ -186,7 +186,7 @@ func BenchmarkTableMap_LoadOrStoreBalanced(b *testing.B) {
 	})
 }
 
-func BenchmarkTableMap_LoadOrStoreCollision(b *testing.B) {
+func BenchmarkConcurrent_LoadOrStoreCollision(b *testing.B) {
 	benchMap(b, bench{
 		setup: func(_ *testing.B, m *gtree.TableMap[string, string]) {
 			m.Set("key", "value")
@@ -200,7 +200,7 @@ func BenchmarkTableMap_LoadOrStoreCollision(b *testing.B) {
 	})
 }
 
-func BenchmarkTableMap_Range(b *testing.B) {
+func BenchmarkConcurrent_Range(b *testing.B) {
 	const mapSize = 1 << 10
 
 	benchMap(b, bench{
