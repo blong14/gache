@@ -13,7 +13,6 @@ func TestNew(t *testing.T) {
 	actor := greader.New()
 	go actor.Init(ctx)
 	t.Cleanup(func() {
-		actor.Close(ctx)
 		cancel()
 	})
 
@@ -22,18 +21,18 @@ func TestNew(t *testing.T) {
 
 	finished := make(chan struct{})
 	go func(ctx context.Context) {
-		select {
-		case <-ctx.Done():
-		case queries := <-actor.OnResult():
-			for _, query := range queries {
-				var resp gactors.QueryResponse
-				resp.Key = query.Key
-				resp.Value = query.Value
-				resp.Success = true
-				query.OnResult(ctx, resp)
-				query.Finish(ctx)
+		defer close(finished)
+		for {
+			select {
+			case <-ctx.Done():
+			case queries, ok := <-actor.OnResult():
+				if !ok {
+					return
+				}
+				for _, query := range queries {
+					query.Finish(ctx)
+				}
 			}
-			close(finished)
 		}
 	}(ctx)
 

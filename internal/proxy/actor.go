@@ -97,11 +97,8 @@ func (qp *QueryProxy) Init(parentCtx context.Context) {
 				go func(ctx context.Context) {
 					for queries := range loader.(gactor.Streamer).OnResult() {
 						for _, query := range queries {
-							if err := qp.limiter.Wait(spanCtx); err != nil {
-								return
-							} else {
-								qp.Execute(spanCtx, query)
-							}
+							qp.Execute(spanCtx, query)
+							_ = gactor.GetQueryResult(spanCtx, query)
 						}
 					}
 				}(query.Context())

@@ -46,6 +46,7 @@ func (va *tableImpl) Init(ctx context.Context) {
 			switch query.Header.Inst {
 			case gactors.GetValue:
 				go func(ctx context.Context) {
+					defer query.Finish(spanCtx)
 					var resp gactors.QueryResponse
 					if value, ok := va.impl.Get(query.Key); ok {
 						resp = gactors.QueryResponse{
@@ -54,21 +55,20 @@ func (va *tableImpl) Init(ctx context.Context) {
 							Success: true,
 						}
 					}
-					defer query.Finish(spanCtx)
 					query.OnResult(spanCtx, resp)
 				}(query.Context())
 			case gactors.Print:
 				go func(ctx context.Context) {
-					va.impl.Print()
 					defer query.Finish(spanCtx)
+					va.impl.Print()
 					var resp gactors.QueryResponse
 					resp.Success = true
 					query.OnResult(spanCtx, resp)
 				}(query.Context())
 			case gactors.SetValue:
 				go func(ctx context.Context) {
-					va.impl.TraceSet(spanCtx, query.Key, query.Value)
 					defer query.Finish(spanCtx)
+					va.impl.TraceSet(spanCtx, query.Key, query.Value)
 					var resp gactors.QueryResponse
 					resp.Key = query.Key
 					resp.Value = query.Value

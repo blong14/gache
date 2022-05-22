@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	grepl "github.com/blong14/gache/internal/actors/replication"
 	"github.com/blong14/gache/internal/proxy"
-	gwal "github.com/blong14/gache/internal/wal"
 	"log"
 	"os"
 	"os/signal"
@@ -20,10 +18,12 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
 
 	gmetrics "github.com/blong14/gache/internal/actors/metrics"
+	grepl "github.com/blong14/gache/internal/actors/replication"
 	gerrors "github.com/blong14/gache/internal/errors"
 	gio "github.com/blong14/gache/internal/io"
 	ghttp "github.com/blong14/gache/internal/io/http"
 	grpc "github.com/blong14/gache/internal/io/rpc"
+	gwal "github.com/blong14/gache/internal/wal"
 )
 
 const (

@@ -75,8 +75,8 @@ func RpcHandlers(proxy *QueryProxy) []grpc.Handler {
 		&QueryService{
 			Limiter: grate.MultiLimiter(
 				rate.NewLimiter(
-					grate.Per(10, time.Millisecond),
-					grate.Burst(1),
+					grate.Per(100, time.Millisecond),
+					grate.Burst(100),
 				),
 			),
 			Proxy: proxy,
