@@ -18,7 +18,7 @@ lint:
 run: lint
 	~/sdk/go1.18/bin/go run github.com/blong14/gache
 
-test: lint
+test:
 	~/sdk/go1.18/bin/go test ./...
 
 build: init lint

@@ -166,7 +166,9 @@ func benchMap(b *testing.B, bench bench) {
 			bench.perG(b, pb, id*b.N, m)
 		})
 		if bench.teardown != nil {
-			b.Cleanup(bench.teardown(b, m))
+			b.Cleanup(func() {
+				bench.teardown(b, m)
+			})
 		}
 	})
 }

@@ -7,15 +7,15 @@ import (
 	"sync/atomic"
 	"testing"
 
-	gtree "github.com/blong14/gache/internal/cache/sorted/tablemap"
+	gtable "github.com/blong14/gache/internal/cache/sorted/tablemap"
 )
 
 func testGetAndSet(t *testing.T) {
 	t.Parallel()
 	// given
-	tree := gtree.NewWithOptions[string, string](
+	tree := gtable.NewWithOptions[string, string](
 		strings.Compare,
-		gtree.WithCapacity[string, string](1024),
+		gtable.WithCapacity[string, string](1024),
 	)
 	expected := "value"
 	keys := []string{
@@ -65,7 +65,7 @@ func testGetAndSet(t *testing.T) {
 func testRange(t *testing.T) {
 	t.Parallel()
 	// given
-	tree := gtree.New[string, string](strings.Compare)
+	tree := gtable.New[string, string](strings.Compare)
 	expected := []string{
 		"key8",
 		"key2",
@@ -108,17 +108,18 @@ func TestTableMap(t *testing.T) {
 }
 
 type bench struct {
-	setup    func(*testing.B, *gtree.TableMap[string, string])
-	perG     func(b *testing.B, pb *testing.PB, i int, m *gtree.TableMap[string, string])
-	teardown func(*testing.B, *gtree.TableMap[string, string]) func()
+	setup    func(*testing.B, *gtable.TableMap[string, string])
+	perG     func(b *testing.B, pb *testing.PB, i int, m *gtable.TableMap[string, string])
+	teardown func(*testing.B, *gtable.TableMap[string, string]) func()
 }
 
-func newMap() *gtree.TableMap[string, string] {
-	return gtree.New[string, string](strings.Compare)
+func newMap() *gtable.TableMap[string, string] {
+	return gtable.New[string, string](strings.Compare)
 }
 
 func benchMap(b *testing.B, bench bench) {
 	b.Run("tablemap benchmark", func(b *testing.B) {
+		b.Skip("skipping...")
 		m := newMap()
 		if bench.setup != nil {
 			bench.setup(b, m)
@@ -140,7 +141,7 @@ func BenchmarkConcurrent_LoadMostlyHits(b *testing.B) {
 	const hits, misses = 1023, 1
 
 	benchMap(b, bench{
-		setup: func(_ *testing.B, m *gtree.TableMap[string, string]) {
+		setup: func(_ *testing.B, m *gtable.TableMap[string, string]) {
 			for i := 0; i < hits; i++ {
 				m.Set(strconv.Itoa(i), strconv.Itoa(i))
 			}
@@ -149,7 +150,7 @@ func BenchmarkConcurrent_LoadMostlyHits(b *testing.B) {
 				m.Range(func(_, _ any) bool { return true })
 			}
 		},
-		perG: func(b *testing.B, pb *testing.PB, i int, m *gtree.TableMap[string, string]) {
+		perG: func(b *testing.B, pb *testing.PB, i int, m *gtable.TableMap[string, string]) {
 			for ; pb.Next(); i++ {
 				m.Get(strconv.Itoa(i % (hits + misses)))
 			}
@@ -162,7 +163,7 @@ func BenchmarkConcurrent_LoadOrStoreBalanced(b *testing.B) {
 	const hits, misses = 128, 128
 
 	benchMap(b, bench{
-		setup: func(b *testing.B, m *gtree.TableMap[string, string]) {
+		setup: func(b *testing.B, m *gtable.TableMap[string, string]) {
 			for i := 0; i < hits; i++ {
 				m.Set(strconv.Itoa(i), strconv.Itoa(i))
 			}
@@ -170,8 +171,9 @@ func BenchmarkConcurrent_LoadOrStoreBalanced(b *testing.B) {
 			for i := 0; i < hits*2; i++ {
 				m.Range(func(_, _ any) bool { return true })
 			}
+			m.Print()
 		},
-		perG: func(b *testing.B, pb *testing.PB, i int, m *gtree.TableMap[string, string]) {
+		perG: func(b *testing.B, pb *testing.PB, i int, m *gtable.TableMap[string, string]) {
 			for ; pb.Next(); i++ {
 				j := i % (hits + misses)
 				if j < hits {
@@ -188,11 +190,11 @@ func BenchmarkConcurrent_LoadOrStoreBalanced(b *testing.B) {
 
 func BenchmarkConcurrent_LoadOrStoreCollision(b *testing.B) {
 	benchMap(b, bench{
-		setup: func(_ *testing.B, m *gtree.TableMap[string, string]) {
+		setup: func(_ *testing.B, m *gtable.TableMap[string, string]) {
 			m.Set("key", "value")
 		},
 
-		perG: func(b *testing.B, pb *testing.PB, i int, m *gtree.TableMap[string, string]) {
+		perG: func(b *testing.B, pb *testing.PB, i int, m *gtable.TableMap[string, string]) {
 			for ; pb.Next(); i++ {
 				m.Set("key", "value")
 			}
@@ -204,12 +206,12 @@ func BenchmarkConcurrent_Range(b *testing.B) {
 	const mapSize = 1 << 10
 
 	benchMap(b, bench{
-		setup: func(_ *testing.B, m *gtree.TableMap[string, string]) {
+		setup: func(_ *testing.B, m *gtable.TableMap[string, string]) {
 			for i := 0; i < mapSize; i++ {
 				m.Set(strconv.Itoa(i), strconv.Itoa(i))
 			}
 		},
-		perG: func(b *testing.B, pb *testing.PB, i int, m *gtree.TableMap[string, string]) {
+		perG: func(b *testing.B, pb *testing.PB, i int, m *gtable.TableMap[string, string]) {
 			for ; pb.Next(); i++ {
 				m.Range(func(_, _ any) bool { return true })
 			}
