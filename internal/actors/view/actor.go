@@ -84,7 +84,6 @@ func (va *tableImpl) Init(ctx context.Context) {
 					query.OnResult(spanCtx, resp)
 				}
 				if va.concurrent {
-					glog.Track("concurrent")
 					go set(query.Context())
 				} else {
 					set(query.Context())
