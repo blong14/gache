@@ -83,6 +83,9 @@ func (qp *QueryProxy) Init(parentCtx context.Context) {
 					&gcache.TableOpts{
 						Concurrent: true,
 						TableName:  query.Header.TableName,
+						//WithCache: func() *gtree.TreeMap[[]byte, []byte] {
+						//	return gtree.New[[]byte, []byte](bytes.Compare)
+						//},
 					},
 				)
 				go table.Init(ctx)
