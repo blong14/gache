@@ -82,15 +82,16 @@ func (va *tableImpl) Init(ctx context.Context) {
 					query.OnResult(ctx, resp)
 				}(spanCtx, query)
 			case gactors.SetValue:
-				go func(ctx context.Context) {
-					defer query.Finish(spanCtx)
-					va.impl.TraceSet(spanCtx, query.Key, query.Value)
+				go func(q *gactors.Query) {
+					ctx := q.Context()
+					defer q.Finish(ctx)
+					va.impl.TraceSet(ctx, query.Key, query.Value)
 					var resp gactors.QueryResponse
 					resp.Key = query.Key
 					resp.Value = query.Value
 					resp.Success = true
-					query.OnResult(spanCtx, resp)
-				}(query.Context())
+					q.OnResult(ctx, resp)
+				}(query)
 			default:
 				query.Finish(ctx)
 			}
