@@ -83,9 +83,6 @@ func (qp *QueryProxy) Init(parentCtx context.Context) {
 					&gcache.TableOpts{
 						Concurrent: true,
 						TableName:  query.Header.TableName,
-						//WithCache: func() *gtree.TreeMap[[]byte, []byte] {
-						//	return gtree.New[[]byte, []byte](bytes.Compare)
-						//},
 					},
 				)
 				go table.Init(ctx)
@@ -96,7 +93,7 @@ func (qp *QueryProxy) Init(parentCtx context.Context) {
 					result.Success = true
 					query.OnResult(spanCtx, result)
 				}(spanCtx)
-			case gactor.GetValue, gactor.Print, gactor.SetValue:
+			case gactor.GetValue, gactor.Print, gactor.Range, gactor.SetValue:
 				table, ok := qp.tables.Get(query.Header.TableName)
 				if !ok {
 					query.Finish(spanCtx)
@@ -107,17 +104,20 @@ func (qp *QueryProxy) Init(parentCtx context.Context) {
 				loader := gfile.New()
 				go loader.Init(query.Context())
 				go loader.Execute(query.Context(), query)
-				go func(ctx context.Context) {
+				go func(parentQuery *gactor.Query) {
+					ctx := parentQuery.Context()
 					for queries := range loader.(gactor.Streamer).OnResult() {
 						for _, query := range queries {
 							if query == nil {
 								continue
 							}
-							go qp.Execute(spanCtx, query)
-							_ = gactor.GetQueryResult(spanCtx, query)
+							go qp.Execute(ctx, query)
+							_ = gactor.GetQueryResult(ctx, query)
 						}
 					}
-				}(query.Context())
+					parentQuery.OnResult(ctx, gactor.QueryResponse{Success: true})
+					parentQuery.Finish(ctx)
+				}(query)
 			default:
 				query.Finish(spanCtx)
 			}

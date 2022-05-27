@@ -104,6 +104,8 @@ func toQuery(tokens []string) (*gactors.Query, <-chan *gactors.QueryResponse) {
 		return gactors.NewLoadFromFileQuery([]byte("default"), []byte(data))
 	case "print":
 		return gactors.NewPrintQuery([]byte("default"))
+	case "range":
+		return gactors.NewRangeQuery([]byte("default"))
 	case "set":
 		key := tokens[1]
 		value := tokens[2]

@@ -3,6 +3,7 @@ package cache
 import (
 	"bytes"
 	"context"
+	"fmt"
 
 	"go.opentelemetry.io/otel"
 
@@ -15,6 +16,7 @@ type Table interface {
 	Set(key []byte, value []byte)
 	TraceSet(ctx context.Context, key []byte, value []byte)
 	Print()
+	Range(ctx context.Context)
 }
 
 type XDB struct {
@@ -39,6 +41,10 @@ func (db *XDB) Print() {
 	db.impl.Print()
 }
 
+func (db *XDB) Range(ctx context.Context) {
+	db.impl.Print()
+}
+
 type DB struct {
 	impl *gskl.SkipList[[]byte, []byte]
 }
@@ -55,6 +61,13 @@ func (db *DB) TraceSet(ctx context.Context, key []byte, value []byte) {
 	_, span := otel.Tracer("").Start(ctx, "db:set")
 	defer span.End()
 	db.impl.Set(key, value)
+}
+
+func (db *DB) Range(ctx context.Context) {
+	db.impl.Range(func(k, v any) bool {
+		fmt.Printf("%s", k)
+		return true
+	})
 }
 
 func (db *DB) Print() {

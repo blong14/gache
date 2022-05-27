@@ -11,7 +11,7 @@ import (
 )
 
 func TestQueryProxy_Execute(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	qp, err := gproxy.NewQueryProxy(gwal.New())
 	if err != nil {
 		t.Error(err)
@@ -23,7 +23,7 @@ func TestQueryProxy_Execute(t *testing.T) {
 		cancel()
 	})
 
-	query, done := gactors.NewLoadFromFileQuery([]byte("default"), []byte("i.csv"))
+	query, done := gactors.NewLoadFromFileQuery([]byte("default"), []byte("j.csv"))
 	qp.Execute(ctx, query)
 
 	select {

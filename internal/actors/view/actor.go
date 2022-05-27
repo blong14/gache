@@ -73,8 +73,16 @@ func (va *tableImpl) Init(ctx context.Context) {
 					resp.Success = true
 					query.OnResult(spanCtx, resp)
 				}(query.Context())
+			case gactors.Range:
+				go func(ctx context.Context, q *gactors.Query) {
+					defer q.Finish(ctx)
+					va.impl.Range(ctx)
+					var resp gactors.QueryResponse
+					resp.Success = true
+					query.OnResult(ctx, resp)
+				}(spanCtx, query)
 			case gactors.SetValue:
-				set := func(ctx context.Context) {
+				go func(ctx context.Context) {
 					defer query.Finish(spanCtx)
 					va.impl.TraceSet(spanCtx, query.Key, query.Value)
 					var resp gactors.QueryResponse
@@ -82,12 +90,7 @@ func (va *tableImpl) Init(ctx context.Context) {
 					resp.Value = query.Value
 					resp.Success = true
 					query.OnResult(spanCtx, resp)
-				}
-				if va.concurrent {
-					go set(query.Context())
-				} else {
-					set(query.Context())
-				}
+				}(query.Context())
 			default:
 				query.Finish(ctx)
 			}

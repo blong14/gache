@@ -12,6 +12,7 @@ const (
 	GetValue
 	Load
 	Print
+	Range
 	SetValue
 )
 
@@ -25,6 +26,8 @@ func (i QueryInstruction) String() string {
 		return "Load"
 	case Print:
 		return "Print"
+	case Range:
+		return "Range"
 	case SetValue:
 		return "SetValue"
 	default:
@@ -111,7 +114,15 @@ func NewPrintQuery(db []byte) (*Query, <-chan *QueryResponse) {
 		Inst:      Print,
 	}
 	return &query, query.outbox
+}
 
+func NewRangeQuery(db []byte) (*Query, <-chan *QueryResponse) {
+	query := NewQuery()
+	query.Header = QueryHeader{
+		TableName: db,
+		Inst:      Range,
+	}
+	return &query, query.outbox
 }
 
 func NewLoadFromFileQuery(db []byte, filename []byte) (*Query, <-chan *QueryResponse) {
