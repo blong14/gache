@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -176,46 +177,62 @@ func benchMap(b *testing.B, bench bench) {
 func BenchmarkConcurrent_LoadMostlyHits(b *testing.B) {
 	const hits, misses = 1023, 1
 
+	var mtx sync.RWMutex
 	benchMap(b, bench{
 		setup: func(_ *testing.B, m *gtree.TreeMap[string, string]) {
 			for i := 0; i < hits; i++ {
+				mtx.Lock()
 				m.Set(strconv.Itoa(i), strconv.Itoa(i))
+				mtx.Unlock()
 			}
 			// Prime the map to get it into a steady state.
 			for i := 0; i < hits*2; i++ {
+				mtx.RLock()
 				m.Range(func(_, _ any) bool { return true })
+				mtx.RUnlock()
 			}
 		},
 		perG: func(b *testing.B, pb *testing.PB, i int, m *gtree.TreeMap[string, string]) {
 			for ; pb.Next(); i++ {
+				mtx.RLock()
 				m.Get(strconv.Itoa(i % (hits + misses)))
+				mtx.RUnlock()
 			}
 		},
 	})
 }
 
 func BenchmarkConcurrent_LoadOrStoreBalanced(b *testing.B) {
-	const hits, misses = 128, 128
+	const hits, misses = 1023, 1023
 
+	var mtx sync.RWMutex
 	benchMap(b, bench{
 		setup: func(b *testing.B, m *gtree.TreeMap[string, string]) {
 			for i := 0; i < hits; i++ {
+				mtx.Lock()
 				m.Set(strconv.Itoa(i), strconv.Itoa(i))
+				mtx.Unlock()
 			}
 			// Prime the map to get it into a steady state.
 			for i := 0; i < hits*2; i++ {
+				mtx.RLock()
 				m.Range(func(_, _ any) bool { return true })
+				mtx.RUnlock()
 			}
 		},
 		perG: func(b *testing.B, pb *testing.PB, i int, m *gtree.TreeMap[string, string]) {
 			for ; pb.Next(); i++ {
 				j := i % (hits + misses)
 				if j < hits {
+					mtx.RLock()
 					if _, ok := m.Get(strconv.Itoa(j)); !ok {
 						b.Fatalf("unexpected miss for key %v", j)
 					}
+					mtx.RUnlock()
 				} else {
-					m.Set(strconv.Itoa(i), strconv.Itoa(i))
+					mtx.Lock()
+					m.Set(strconv.Itoa(j), strconv.Itoa(j))
+					mtx.Unlock()
 				}
 			}
 		},
@@ -223,14 +240,19 @@ func BenchmarkConcurrent_LoadOrStoreBalanced(b *testing.B) {
 }
 
 func BenchmarkConcurrent_LoadOrStoreCollision(b *testing.B) {
+	var mtx sync.RWMutex
 	benchMap(b, bench{
 		setup: func(_ *testing.B, m *gtree.TreeMap[string, string]) {
+			mtx.Lock()
 			m.Set("key", "value")
+			mtx.Unlock()
 		},
 
 		perG: func(b *testing.B, pb *testing.PB, i int, m *gtree.TreeMap[string, string]) {
 			for ; pb.Next(); i++ {
+				mtx.Lock()
 				m.Set("key", "value")
+				mtx.Unlock()
 			}
 		},
 	})
@@ -238,16 +260,20 @@ func BenchmarkConcurrent_LoadOrStoreCollision(b *testing.B) {
 
 func BenchmarkConcurrent_Range(b *testing.B) {
 	const mapSize = 1 << 10
-
+	var mtx sync.RWMutex
 	benchMap(b, bench{
 		setup: func(_ *testing.B, m *gtree.TreeMap[string, string]) {
 			for i := 0; i < mapSize; i++ {
+				mtx.Lock()
 				m.Set(strconv.Itoa(i), strconv.Itoa(i))
+				mtx.Unlock()
 			}
 		},
 		perG: func(b *testing.B, pb *testing.PB, i int, m *gtree.TreeMap[string, string]) {
 			for ; pb.Next(); i++ {
+				mtx.RLock()
 				m.Range(func(_, _ any) bool { return true })
+				mtx.RUnlock()
 			}
 		},
 	})

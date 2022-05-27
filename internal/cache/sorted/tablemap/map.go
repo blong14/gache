@@ -85,6 +85,11 @@ func (c *TableMap[K, V]) greaterthan(key K, i uint) bool {
 	return i < uint(c.Size()) && c.comparator(key, c.impl[i].Key.(K)) > 0
 }
 
+func (c *TableMap[K, V]) Reset() {
+	temp := c.impl[0:]
+	c.impl = temp
+}
+
 // Get returns the value associated with the specified key (or else false)
 func (c *TableMap[K, V]) Get(key K) (V, bool) {
 	j := c.search(key)
@@ -131,7 +136,7 @@ func (c *TableMap[K, V]) Set(key K, value V) {
 	}
 	index := c.search(key)
 	if c.equalto(key, uint(index)) {
-		c.impl[index] = newMapEntry(key, value)
+		c.impl[index].Value = value
 		return
 	}
 	c.insertSort(index, newMapEntry(key, value))

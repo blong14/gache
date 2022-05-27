@@ -160,7 +160,7 @@ func BenchmarkConcurrent_LoadMostlyHits(b *testing.B) {
 }
 
 func BenchmarkConcurrent_LoadOrStoreBalanced(b *testing.B) {
-	const hits, misses = 128, 128
+	const hits, misses = 1023, 1023
 
 	benchMap(b, bench{
 		setup: func(b *testing.B, m *gtable.TableMap[string, string]) {
@@ -181,7 +181,7 @@ func BenchmarkConcurrent_LoadOrStoreBalanced(b *testing.B) {
 						b.Fatalf("unexpected miss for key %v", j)
 					}
 				} else {
-					m.Set(strconv.Itoa(i), strconv.Itoa(i))
+					m.Set(strconv.Itoa(j), strconv.Itoa(j))
 				}
 			}
 		},
