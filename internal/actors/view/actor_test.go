@@ -43,7 +43,7 @@ func TestViewActor_Get(t *testing.T) {
 	ctx := context.TODO()
 	opts := &gcache.TableOpts{
 		WithSkipList: func() *gskl.SkipList[[]byte, []byte] {
-			impl := gskl.New[[]byte, []byte](bytes.Compare)
+			impl := gskl.XNew[[]byte, []byte](bytes.Compare, bytes.Equal)
 			impl.Set([]byte("key"), []byte("value"))
 			return impl
 		},

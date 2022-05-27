@@ -21,6 +21,7 @@ run: lint
 
 test:
 	~/sdk/go1.18/bin/go test -race -cpu=8 -parallel=8 ./...
+	~/sdk/go1.18/bin/go test ./...
 
 build: init
 	~/sdk/go1.18/bin/go build -o $(PWD)/bin/gctl github.com/blong14/gache/cmd/gctl

@@ -16,7 +16,7 @@ func TestReader_ViewGet(t *testing.T) {
 	v := gache.NewTable(
 		&gache.TableOpts{
 			WithSkipList: func() *gskl.SkipList[[]byte, []byte] {
-				impl := gskl.New[[]byte, []byte](bytes.Compare)
+				impl := gskl.XNew[[]byte, []byte](bytes.Compare, bytes.Equal)
 				impl.Set(k, expected)
 				return impl
 			},
