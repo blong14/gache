@@ -38,21 +38,9 @@ func (f *loader) Init(ctx context.Context) {
 				}
 				return
 			}
-			data, err := gfile.ReadCSV(string(query.Header.FileName))
+			buffer, err := gfile.ReadCSV(string(query.Header.FileName))
 			if err != nil {
 				log.Fatal(err)
-			}
-			buffer := make([]gfile.KeyValue, 0, len(data))
-			for _, d := range data {
-				buffer = append(buffer, d)
-				if len(buffer) >= 1000 {
-					select {
-					case <-ctx.Done():
-					case <-f.done:
-					case f.outbox <- buffer:
-						buffer = []gfile.KeyValue{}
-					}
-				}
 			}
 			if len(buffer) > 0 {
 				select {
@@ -61,9 +49,7 @@ func (f *loader) Init(ctx context.Context) {
 				case f.outbox <- buffer:
 				}
 			}
-			query.OnResult(ctx, gactors.QueryResponse{Success: true})
-			query.Finish(ctx)
-			f.Close(ctx)
+			f.Close(query.Context())
 			return
 		}
 	}
