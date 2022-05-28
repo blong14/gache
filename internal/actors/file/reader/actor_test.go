@@ -28,8 +28,6 @@ func TestNew(t *testing.T) {
 			case <-ctx.Done():
 			case queries, ok := <-actor.OnResult():
 				if !ok {
-					query.OnResult(ctx, gactors.QueryResponse{Success: true})
-					query.Finish(ctx)
 					return
 				}
 				for _, q := range queries {

@@ -25,6 +25,7 @@ func New() gactors.Streamer {
 
 func (f *loader) Init(ctx context.Context) {
 	glog.Track("%T waiting for work", f)
+	defer f.Close(ctx)
 	for {
 		select {
 		case <-ctx.Done():
@@ -49,7 +50,6 @@ func (f *loader) Init(ctx context.Context) {
 				case f.outbox <- buffer:
 				}
 			}
-			f.Close(query.Context())
 			return
 		}
 	}

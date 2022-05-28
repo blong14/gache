@@ -19,15 +19,21 @@ func TestGetAndSet(t *testing.T) {
 	list := glist.XNew[[]byte, []byte](bytes.Compare, bytes.Equal)
 	expected := "value"
 	keys := []string{
-		"key8",
-		"key2",
-		"key1",
-		"key5",
-		"key3",
-		"key9",
-		"key7",
-		"key4",
-		"key6",
+		"a",
+		"b",
+		"c",
+		"d",
+		"e",
+		"f",
+		"g",
+		"h",
+		"i",
+		"j",
+		"k",
+		"l",
+		"m",
+		"n",
+		"o",
 	}
 
 	var wg sync.WaitGroup
