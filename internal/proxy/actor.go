@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/time/rate"
 
 	gactor "github.com/blong14/gache/internal/actors"
@@ -15,6 +16,7 @@ import (
 	gview "github.com/blong14/gache/internal/actors/view"
 	gcache "github.com/blong14/gache/internal/cache"
 	gtree "github.com/blong14/gache/internal/cache/sorted/treemap"
+	genv "github.com/blong14/gache/internal/environment"
 	grate "github.com/blong14/gache/internal/limiter"
 	glog "github.com/blong14/gache/internal/logging"
 	gwal "github.com/blong14/gache/internal/wal"
@@ -73,10 +75,14 @@ func (qp *QueryProxy) Init(parentCtx context.Context) {
 				}
 				return
 			}
-			spanCtx, span := otel.Tracer("query-proxy").Start(
-				query.Context(), "query-proxy:proxy",
-			)
-			go qp.log.Execute(spanCtx, query)
+			ctx := query.Context()
+			var span trace.Span
+			if genv.TraceEnabled() {
+				ctx, span = otel.Tracer("query-proxy").Start(
+					ctx, "query-proxy:proxy",
+				)
+			}
+			go qp.log.Execute(ctx, query)
 			switch query.Header.Inst {
 			case gactor.AddTable:
 				table := gview.New(
@@ -88,40 +94,33 @@ func (qp *QueryProxy) Init(parentCtx context.Context) {
 				go table.Init(ctx)
 				qp.tables.Set(query.Header.TableName, table)
 				go func(ctx context.Context) {
-					defer query.Finish(spanCtx)
+					defer query.Finish(ctx)
 					var result gactor.QueryResponse
 					result.Success = true
-					query.OnResult(spanCtx, result)
-				}(spanCtx)
+					query.OnResult(ctx, result)
+				}(ctx)
 			case gactor.GetValue, gactor.Print, gactor.Range, gactor.SetValue:
 				table, ok := qp.tables.Get(query.Header.TableName)
 				if !ok {
-					query.Finish(spanCtx)
+					query.Finish(ctx)
 					continue
 				}
-				go table.Execute(spanCtx, query)
+				go table.Execute(ctx, query)
 			case gactor.Load:
-				loader := gfile.New()
-				go loader.Init(query.Context())
-				go loader.Execute(query.Context(), query)
-				go func(parentQuery *gactor.Query) {
-					ctx := parentQuery.Context()
-					for queries := range loader.(gactor.Streamer).OnResult() {
-						for _, query := range queries {
-							if query == nil {
-								continue
-							}
-							go qp.Execute(ctx, query)
-							_ = gactor.GetQueryResult(ctx, query)
-						}
-					}
-					parentQuery.OnResult(ctx, gactor.QueryResponse{Success: true})
-					parentQuery.Finish(ctx)
-				}(query)
+				table, ok := qp.tables.Get(query.Header.TableName)
+				if !ok {
+					query.Finish(ctx)
+					continue
+				}
+				loader := gfile.New(table)
+				go loader.Init(ctx)
+				go loader.Execute(ctx, query)
 			default:
-				query.Finish(spanCtx)
+				query.Finish(ctx)
 			}
-			span.End()
+			if genv.TraceEnabled() {
+				span.End()
+			}
 		}
 	}
 }

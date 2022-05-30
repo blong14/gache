@@ -9,6 +9,7 @@ import (
 
 	gskl "github.com/blong14/gache/internal/cache/sorted/skiplist"
 	gtree "github.com/blong14/gache/internal/cache/sorted/treemap"
+	genv "github.com/blong14/gache/internal/environment"
 )
 
 type Table interface {
@@ -32,8 +33,10 @@ func (db *XDB) Set(key []byte, value []byte) {
 }
 
 func (db *XDB) TraceSet(ctx context.Context, key []byte, value []byte) {
-	_, span := otel.Tracer("").Start(ctx, "db:set")
-	defer span.End()
+	if genv.TraceEnabled() {
+		_, span := otel.Tracer("").Start(ctx, "db:set")
+		defer span.End()
+	}
 	db.impl.Set(key, value)
 }
 
@@ -58,8 +61,10 @@ func (db *DB) Set(key []byte, value []byte) {
 }
 
 func (db *DB) TraceSet(ctx context.Context, key []byte, value []byte) {
-	_, span := otel.Tracer("").Start(ctx, "db:set")
-	defer span.End()
+	if genv.TraceEnabled() {
+		_, span := otel.Tracer("").Start(ctx, "db:set")
+		defer span.End()
+	}
 	db.impl.Set(key, value)
 }
 
