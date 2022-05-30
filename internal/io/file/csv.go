@@ -5,17 +5,18 @@ import (
 	"io"
 	"os"
 
+	"github.com/blong14/gache/internal/actors"
 	gerrors "github.com/blong14/gache/internal/errors"
 )
 
-func ReadCSV(data string) ([]KeyValue, error) {
+func ReadCSV(data string) ([]actors.KeyValue, error) {
 	f, err := os.Open(data)
 	if err != nil {
 		return nil, gerrors.NewGError(err)
 	}
 	defer func() { _ = f.Close() }()
 	csvReader := csv.NewReader(f)
-	out := make([]KeyValue, 0)
+	out := make([]actors.KeyValue, 0)
 	for {
 		row, err := csvReader.Read()
 		if err == io.EOF {
@@ -24,12 +25,12 @@ func ReadCSV(data string) ([]KeyValue, error) {
 		if err != nil {
 			return nil, gerrors.NewGError(err)
 		}
-		out = append(out, KeyValue{Key: []byte(row[0]), Value: []byte(row[1])})
+		out = append(out, actors.KeyValue{Key: []byte(row[0]), Value: []byte(row[1])})
 	}
 	return out, nil
 }
 
-func WriteCSV(data string, keyValues []KeyValue) error {
+func WriteCSV(data string, keyValues []actors.KeyValue) error {
 	f, err := os.Create(data)
 	if err != nil {
 		return gerrors.NewGError(err)

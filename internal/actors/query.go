@@ -9,6 +9,7 @@ type QueryInstruction int
 
 const (
 	AddTable QueryInstruction = iota
+	BatchSetValue
 	GetValue
 	Load
 	Print
@@ -20,6 +21,8 @@ func (i QueryInstruction) String() string {
 	switch i {
 	case AddTable:
 		return "AddTable"
+	case BatchSetValue:
+		return "BatchSetValue"
 	case GetValue:
 		return "GetValue"
 	case Load:
@@ -53,6 +56,7 @@ type Query struct {
 	Header QueryHeader
 	Key    []byte
 	Value  []byte
+	Values []KeyValue
 }
 
 func NewQuery() Query {
@@ -144,6 +148,17 @@ func NewSetValueQuery(db []byte, key []byte, value []byte) (*Query, <-chan *Quer
 	}
 	query.Key = key
 	query.Value = value
+	return &query, query.outbox
+}
+
+func NewBatchSetValueQuery(db []byte, values []KeyValue) (*Query, <-chan *QueryResponse) {
+	ctx := context.Background()
+	query := TraceNewQuery(ctx)
+	query.Header = QueryHeader{
+		TableName: db,
+		Inst:      BatchSetValue,
+	}
+	query.Values = values
 	return &query, query.outbox
 }
 

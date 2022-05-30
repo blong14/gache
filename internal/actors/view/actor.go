@@ -3,8 +3,6 @@ package view
 import (
 	"context"
 
-	"go.opentelemetry.io/otel"
-
 	gactors "github.com/blong14/gache/internal/actors"
 	gcache "github.com/blong14/gache/internal/cache"
 	glog "github.com/blong14/gache/internal/logging"
@@ -29,73 +27,67 @@ func New(opts *gcache.TableOpts) gactors.Actor {
 	}
 }
 
-func (va *tableImpl) Init(ctx context.Context) {
+func (va *tableImpl) Init(parentCtx context.Context) {
 	glog.Track("%T %s waiting for work", va, va.name)
 	for {
 		select {
-		case <-ctx.Done():
+		case <-parentCtx.Done():
 			return
 		case <-va.done:
 			return
 		case query, ok := <-va.inbox:
 			if !ok {
 				if query != nil {
-					query.Finish(ctx)
+					query.Finish(parentCtx)
 				}
 				return
 			}
-			spanCtx, span := otel.Tracer("query-view").Start(
-				query.Context(), "query-view:proxy")
+			queryCtx := query.Context()
 			switch query.Header.Inst {
 			case gactors.GetValue:
-				get := func(ctx context.Context) {
-					defer query.Finish(spanCtx)
+				go func(ctx context.Context, q *gactors.Query) {
+					defer q.Finish(ctx)
 					var resp gactors.QueryResponse
-					if value, ok := va.impl.Get(query.Key); ok {
+					if value, ok := va.impl.Get(q.Key); ok {
 						resp = gactors.QueryResponse{
-							Key:     query.Key,
+							Key:     q.Key,
 							Value:   value,
 							Success: true,
 						}
 					}
-					query.OnResult(spanCtx, resp)
-				}
-				if va.concurrent {
-					go get(query.Context())
-				} else {
-					get(query.Context())
-				}
+					q.OnResult(ctx, resp)
+				}(queryCtx, query)
 			case gactors.Print:
-				go func(ctx context.Context) {
-					defer query.Finish(spanCtx)
+				go func(ctx context.Context, q *gactors.Query) {
+					defer q.Finish(ctx)
 					va.impl.Print()
-					var resp gactors.QueryResponse
-					resp.Success = true
-					query.OnResult(spanCtx, resp)
-				}(query.Context())
+					q.OnResult(ctx, gactors.QueryResponse{Success: true})
+				}(queryCtx, query)
 			case gactors.Range:
 				go func(ctx context.Context, q *gactors.Query) {
 					defer q.Finish(ctx)
 					va.impl.Range(ctx)
-					var resp gactors.QueryResponse
-					resp.Success = true
-					query.OnResult(ctx, resp)
-				}(spanCtx, query)
+					q.OnResult(ctx, gactors.QueryResponse{Success: true})
+				}(queryCtx, query)
 			case gactors.SetValue:
-				go func(q *gactors.Query) {
-					ctx := q.Context()
+				go func(ctx context.Context, q *gactors.Query) {
 					defer q.Finish(ctx)
-					va.impl.TraceSet(ctx, query.Key, query.Value)
-					var resp gactors.QueryResponse
-					resp.Key = query.Key
-					resp.Value = query.Value
-					resp.Success = true
-					q.OnResult(ctx, resp)
-				}(query)
+					va.impl.TraceSet(ctx, q.Key, q.Value)
+					q.OnResult(ctx, gactors.QueryResponse{Success: true, Key: q.Key, Value: q.Value})
+				}(queryCtx, query)
+			case gactors.BatchSetValue:
+				go func(ctx context.Context, q *gactors.Query) {
+					defer q.Finish(ctx)
+					for _, kv := range q.Values {
+						if kv.Valid() {
+							va.impl.TraceSet(ctx, kv.Key, kv.Value)
+						}
+					}
+					q.OnResult(ctx, gactors.QueryResponse{Success: true})
+				}(queryCtx, query)
 			default:
-				query.Finish(ctx)
+				query.Finish(queryCtx)
 			}
-			span.End()
 		}
 	}
 }
