@@ -70,9 +70,6 @@ func (qp *QueryProxy) Init(parentCtx context.Context) {
 			return
 		case query, ok := <-qp.inbox:
 			if !ok {
-				if query != nil {
-					query.Finish(ctx)
-				}
 				return
 			}
 			ctx := query.Context()
@@ -93,30 +90,22 @@ func (qp *QueryProxy) Init(parentCtx context.Context) {
 				)
 				go table.Init(ctx)
 				qp.tables.Set(query.Header.TableName, table)
-				go func(ctx context.Context) {
-					defer query.Finish(ctx)
-					var result gactor.QueryResponse
-					result.Success = true
-					query.OnResult(ctx, result)
-				}(ctx)
+				go query.Done(gactor.QueryResponse{Success: true})
 			case gactor.GetValue, gactor.Print, gactor.Range, gactor.SetValue:
 				table, ok := qp.tables.Get(query.Header.TableName)
 				if !ok {
-					query.Finish(ctx)
 					continue
 				}
 				go table.Execute(ctx, query)
 			case gactor.Load:
 				table, ok := qp.tables.Get(query.Header.TableName)
 				if !ok {
-					query.Finish(ctx)
 					continue
 				}
 				loader := gfile.New(table)
 				go loader.Init(ctx)
 				go loader.Execute(ctx, query)
 			default:
-				query.Finish(ctx)
 			}
 			if genv.TraceEnabled() {
 				span.End()
@@ -144,7 +133,8 @@ func StartProxy(ctx context.Context, qp *QueryProxy) {
 		log.Println("starting query proxy")
 		go qp.log.Start(ctx)
 		go qp.Init(ctx)
-		query, done := gactor.NewAddTableQuery([]byte("default"))
+		query, done := gactor.NewAddTableQuery(ctx, []byte("default"))
+		defer close(done)
 		qp.Execute(ctx, query)
 		<-done
 		log.Println("default table added")

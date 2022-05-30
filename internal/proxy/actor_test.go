@@ -17,40 +17,45 @@ func TestQueryProxy_Execute(t *testing.T) {
 		t.Error(err)
 	}
 
+	query, done := gactors.NewLoadFromFileQuery(ctx, []byte("default"), []byte("j.csv"))
 	gproxy.StartProxy(ctx, qp)
 	t.Cleanup(func() {
 		gproxy.StopProxy(ctx, qp)
+		close(done)
 		cancel()
 	})
 
-	query, done := gactors.NewLoadFromFileQuery([]byte("default"), []byte("j.csv"))
 	qp.Execute(ctx, query)
 
 	select {
 	case <-ctx.Done():
 		t.Error(ctx.Err())
 	case result, ok := <-done:
-		if !ok || !result.Success {
+		if !ok || !result.GetResponse().Success {
 			t.Error("not ok")
 			return
 		}
 	}
 
-	query, done = gactors.NewPrintQuery([]byte("default"))
+	query, finished := gactors.NewPrintQuery(ctx, []byte("default"))
 	qp.Execute(ctx, query)
+
+	t.Cleanup(func() {
+		close(finished)
+	})
 
 	select {
 	case <-ctx.Done():
 		t.Error(ctx.Err())
-	case result, ok := <-done:
-		if !ok || !result.Success {
+	case result, ok := <-finished:
+		if !ok || !result.GetResponse().Success {
 			t.Error("not ok")
 			return
 		}
 	}
 }
 
-func BenchmarkXConcurrent_NewQueryProxy(b *testing.B) {
+func BenchmarkConcurrent_NewQueryProxy(b *testing.B) {
 	b.Setenv("DEBUG", "false")
 	b.Setenv("TRACE", "false")
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Second)
@@ -68,13 +73,14 @@ func BenchmarkXConcurrent_NewQueryProxy(b *testing.B) {
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
 				start := time.Now()
-				query, done := gactors.NewLoadFromFileQuery([]byte("default"), []byte("i.csv"))
+				query, done := gactors.NewLoadFromFileQuery(ctx, []byte("default"), []byte("i.csv"))
 				qp.Execute(ctx, query)
 				result := <-done
-				if !result.Success {
+				if !result.GetResponse().Success {
 					b.Error("not ok")
 				}
 				b.ReportMetric(float64(time.Since(start).Milliseconds()), "ms")
+				close(done)
 			}
 		})
 	})

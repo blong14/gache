@@ -37,16 +37,12 @@ func (va *tableImpl) Init(parentCtx context.Context) {
 			return
 		case query, ok := <-va.inbox:
 			if !ok {
-				if query != nil {
-					query.Finish(parentCtx)
-				}
 				return
 			}
 			queryCtx := query.Context()
 			switch query.Header.Inst {
 			case gactors.GetValue:
 				go func(ctx context.Context, q *gactors.Query) {
-					defer q.Finish(ctx)
 					var resp gactors.QueryResponse
 					if value, ok := va.impl.Get(q.Key); ok {
 						resp = gactors.QueryResponse{
@@ -55,38 +51,33 @@ func (va *tableImpl) Init(parentCtx context.Context) {
 							Success: true,
 						}
 					}
-					q.OnResult(ctx, resp)
+					q.Done(resp)
 				}(queryCtx, query)
 			case gactors.Print:
 				go func(ctx context.Context, q *gactors.Query) {
-					defer q.Finish(ctx)
 					va.impl.Print()
-					q.OnResult(ctx, gactors.QueryResponse{Success: true})
+					q.Done(gactors.QueryResponse{Success: true})
 				}(queryCtx, query)
 			case gactors.Range:
 				go func(ctx context.Context, q *gactors.Query) {
-					defer q.Finish(ctx)
 					va.impl.Range(ctx)
-					q.OnResult(ctx, gactors.QueryResponse{Success: true})
+					q.Done(gactors.QueryResponse{Success: true})
 				}(queryCtx, query)
 			case gactors.SetValue:
 				go func(ctx context.Context, q *gactors.Query) {
-					defer q.Finish(ctx)
 					va.impl.TraceSet(ctx, q.Key, q.Value)
-					q.OnResult(ctx, gactors.QueryResponse{Success: true, Key: q.Key, Value: q.Value})
+					q.Done(gactors.QueryResponse{Success: true, Key: q.Key, Value: q.Value})
 				}(queryCtx, query)
 			case gactors.BatchSetValue:
 				go func(ctx context.Context, q *gactors.Query) {
-					defer q.Finish(ctx)
 					for _, kv := range q.Values {
 						if kv.Valid() {
 							va.impl.TraceSet(ctx, kv.Key, kv.Value)
 						}
 					}
-					q.OnResult(ctx, gactors.QueryResponse{Success: true})
+					q.Done(gactors.QueryResponse{Success: true})
 				}(queryCtx, query)
 			default:
-				query.Finish(queryCtx)
 			}
 		}
 	}

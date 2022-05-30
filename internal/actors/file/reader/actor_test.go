@@ -26,11 +26,12 @@ func TestNew(t *testing.T) {
 		cancel()
 	})
 
-	query, done := gactors.NewLoadFromFileQuery([]byte("default"), []byte("i.csv"))
+	query, done := gactors.NewLoadFromFileQuery(ctx, []byte("default"), []byte("i.csv"))
+	defer close(done)
 	go actor.Execute(ctx, query)
 
 	result := <-done
-	if !result.Success {
+	if !result.GetResponse().Success {
 		t.Error("data not loaded")
 	}
 }

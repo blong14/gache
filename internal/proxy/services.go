@@ -51,23 +51,29 @@ func (qs *QueryService) OnQuery(req *QueryRequest, resp *QueryResponse) error {
 		)
 	}
 
-	qry := gactor.TraceNewQuery(ctx)
+	done := make(chan *gactor.Query, 1)
+	defer close(done)
+	qry := gactor.NewQuery(ctx, done)
 	qry.Header = query.Header
 	qry.Key = query.Key
 	qry.Value = query.Value
 
 	err := qs.Limiter.Wait(ctx)
 	if err != nil {
-		qry.Finish(ctx)
 		return gerrors.NewGError(err)
 	}
 
-	go qs.Proxy.Execute(ctx, &qry)
-	result := gactor.GetQueryResult(ctx, &qry)
-	if result != nil {
-		resp.Success = result.Success
+	go qs.Proxy.Execute(ctx, qry)
+	select {
+	case <-ctx.Done():
+	case result, ok := <-done:
+		if !ok {
+			break
+		}
+		if result != nil {
+			resp.Success = result.GetResponse().Success
+		}
 	}
-
 	glog.Track("%T in %s", req, time.Since(start))
 	span.End()
 	return nil

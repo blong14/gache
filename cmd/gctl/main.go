@@ -123,7 +123,7 @@ func Accept(ctx context.Context, qp *gproxy.QueryProxy) {
 			if err != nil {
 				log.Fatal(err)
 			}
-			query, finished := toQuery(cmd)
+			query, finished := toQuery(ctx, cmd)
 			if query == nil || finished == nil {
 				continue
 			}
@@ -131,13 +131,18 @@ func Accept(ctx context.Context, qp *gproxy.QueryProxy) {
 			qp.Execute(ctx, query)
 			for result := range finished {
 				fmt.Println("% --\tkey\tvalue")
-				fmt.Printf("[%s] 1.\t%s\t%s", time.Since(start), string(result.Key), result.Value)
+				resp := result.GetResponse()
+				if resp.Success {
+					fmt.Printf("[%s] 1.\t%s\t%s", time.Since(start), string(result.Key), resp.Value)
+				}
+				break
 			}
+			close(finished)
 		}
 	}
 }
 
-func toQuery(tokens []string) (*gactors.Query, <-chan *gactors.QueryResponse) {
+func toQuery(ctx context.Context, tokens []string) (*gactors.Query, chan *gactors.Query) {
 	cmd := tokens[0]
 	switch cmd {
 	case "exit":
@@ -145,18 +150,16 @@ func toQuery(tokens []string) (*gactors.Query, <-chan *gactors.QueryResponse) {
 		return nil, nil
 	case "get":
 		key := tokens[1]
-		return gactors.NewGetValueQuery([]byte("default"), []byte(key))
+		return gactors.NewGetValueQuery(ctx, []byte("default"), []byte(key))
 	case "load":
 		data := tokens[1]
-		return gactors.NewLoadFromFileQuery([]byte("default"), []byte(data))
-	case "print":
-		return gactors.NewPrintQuery([]byte("default"))
+		return gactors.NewLoadFromFileQuery(ctx, []byte("default"), []byte(data))
 	case "range":
-		return gactors.NewRangeQuery([]byte("default"))
+		return gactors.NewRangeQuery(ctx, []byte("default"))
 	case "set":
 		key := tokens[1]
 		value := tokens[2]
-		return gactors.NewSetValueQuery([]byte("default"), []byte(key), []byte(value))
+		return gactors.NewSetValueQuery(ctx, []byte("default"), []byte(key), []byte(value))
 	default:
 		return nil, nil
 	}

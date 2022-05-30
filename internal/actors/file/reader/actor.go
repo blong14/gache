@@ -12,20 +12,18 @@ import (
 
 // implements Actor interface
 type loader struct {
-	done   chan struct{}
-	inbox  chan *gactors.Query
-	outbox chan []gactors.KeyValue
-	Table  gactors.Actor
-	scnr   *gfile.Scanner
+	done  chan struct{}
+	inbox chan *gactors.Query
+	table gactors.Actor
+	scnr  *gfile.Scanner
 }
 
 func New(table gactors.Actor) gactors.Actor {
 	return &loader{
-		inbox:  make(chan *gactors.Query),
-		outbox: make(chan []gactors.KeyValue),
-		done:   make(chan struct{}),
-		Table:  table,
-		scnr:   gfile.NewScanner(),
+		inbox: make(chan *gactors.Query),
+		done:  make(chan struct{}),
+		table: table,
+		scnr:  gfile.NewScanner(),
 	}
 }
 
@@ -39,10 +37,9 @@ func (f *loader) Init(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case query, ok := <-f.inbox:
-			if !ok || f.Table == nil || query.Header.Inst != gactors.Load {
+			if !ok || f.table == nil || query.Header.Inst != gactors.Load {
 				if query != nil {
-					query.OnResult(ctx, gactors.QueryResponse{Success: false})
-					query.Finish(ctx)
+					query.Done(gactors.QueryResponse{Success: false})
 				}
 				return
 			}
@@ -53,11 +50,12 @@ func (f *loader) Init(ctx context.Context) {
 			f.scnr.Init(buffer)
 			var wg sync.WaitGroup
 			for f.scnr.Scan() {
+				query, done := gactors.NewBatchSetValueQuery(ctx, []byte("default"), f.scnr.Rows())
+				f.table.Execute(query.Context(), query)
 				wg.Add(1)
-				query, done := gactors.NewBatchSetValueQuery([]byte("default"), f.scnr.Rows())
-				f.Table.Execute(ctx, query)
 				go func() {
 					defer wg.Done()
+					defer close(done)
 					select {
 					case <-ctx.Done():
 					case <-done:
@@ -65,8 +63,7 @@ func (f *loader) Init(ctx context.Context) {
 				}()
 			}
 			wg.Wait()
-			query.OnResult(ctx, gactors.QueryResponse{Success: true})
-			query.Finish(ctx)
+			query.Done(gactors.QueryResponse{Success: true})
 			return
 		}
 	}
