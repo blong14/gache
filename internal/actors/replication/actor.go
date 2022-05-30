@@ -5,13 +5,13 @@ import (
 	"net/rpc"
 
 	gactors "github.com/blong14/gache/internal/actors"
+	gproxy "github.com/blong14/gache/internal/actors/proxy"
 	gerrors "github.com/blong14/gache/internal/errors"
 	glog "github.com/blong14/gache/internal/logging"
-	gproxy "github.com/blong14/gache/internal/proxy"
 )
 
-// implements Actor interface
-type queryReplicator struct {
+// QueryReplicator implements Actor interface
+type QueryReplicator struct {
 	inbox  chan *gactors.Query
 	done   chan struct{}
 	client *rpc.Client
@@ -19,14 +19,14 @@ type queryReplicator struct {
 }
 
 func New(client *rpc.Client) gactors.Actor {
-	return &queryReplicator{
+	return &QueryReplicator{
 		client: client,
 		inbox:  make(chan *gactors.Query),
 		done:   make(chan struct{}),
 	}
 }
 
-func (r *queryReplicator) Init(ctx context.Context) {
+func (r *QueryReplicator) Init(ctx context.Context) {
 	glog.Track("%T waiting for work", r)
 	for {
 		select {
@@ -53,11 +53,11 @@ func (r *queryReplicator) Init(ctx context.Context) {
 	}
 }
 
-func (r *queryReplicator) Close(_ context.Context) {
+func (r *QueryReplicator) Close(_ context.Context) {
 	close(r.done)
 }
 
-func (r *queryReplicator) Execute(ctx context.Context, query *gactors.Query) {
+func (r *QueryReplicator) Execute(ctx context.Context, query *gactors.Query) {
 	select {
 	case <-r.done:
 	case <-ctx.Done():

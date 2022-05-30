@@ -5,43 +5,35 @@ import (
 	"context"
 	"log"
 	"sync"
-	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/time/rate"
 
 	gactor "github.com/blong14/gache/internal/actors"
 	gfile "github.com/blong14/gache/internal/actors/file/reader"
 	gview "github.com/blong14/gache/internal/actors/view"
+	gwal "github.com/blong14/gache/internal/actors/wal"
 	gcache "github.com/blong14/gache/internal/cache"
 	gtree "github.com/blong14/gache/internal/cache/sorted/treemap"
 	genv "github.com/blong14/gache/internal/environment"
-	grate "github.com/blong14/gache/internal/limiter"
 	glog "github.com/blong14/gache/internal/logging"
-	gwal "github.com/blong14/gache/internal/wal"
 )
 
 // QueryProxy implements gactors.Actor interface
 type QueryProxy struct {
-	inbox   chan *gactor.Query
-	done    chan struct{}
-	log     *gwal.WAL
-	limiter grate.RateLimiter
+	inbox chan *gactor.Query
+	done  chan struct{}
+	log   *gwal.Log
 	// table name to table actor
 	tables *gtree.TreeMap[[]byte, gactor.Actor]
 }
 
+var _ gactor.Actor = &QueryProxy{}
+
 // NewQueryProxy returns a fully ready to use *QueryProxy
-func NewQueryProxy(wal *gwal.WAL) (*QueryProxy, error) {
+func NewQueryProxy(wal *gwal.Log) (*QueryProxy, error) {
 	return &QueryProxy{
-		log: wal,
-		limiter: grate.MultiLimiter(
-			rate.NewLimiter(
-				grate.Per(1, time.Millisecond),
-				grate.Burst(1),
-			),
-		),
+		log:    wal,
 		inbox:  make(chan *gactor.Query),
 		done:   make(chan struct{}),
 		tables: gtree.New[[]byte, gactor.Actor](bytes.Compare),
@@ -58,7 +50,7 @@ func (qp *QueryProxy) Init(parentCtx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-qp.done:
-			qp.log.Stop(ctx)
+			qp.log.Close(ctx)
 			qp.tables.Range(func(_, v any) bool {
 				sub, ok := v.(gactor.Actor)
 				if !ok {
@@ -90,7 +82,7 @@ func (qp *QueryProxy) Init(parentCtx context.Context) {
 				)
 				go table.Init(ctx)
 				qp.tables.Set(query.Header.TableName, table)
-				go query.Done(gactor.QueryResponse{Success: true})
+				query.Done(gactor.QueryResponse{Success: true})
 			case gactor.GetValue, gactor.Print, gactor.Range, gactor.SetValue:
 				table, ok := qp.tables.Get(query.Header.TableName)
 				if !ok {
@@ -131,7 +123,7 @@ var onc sync.Once
 func StartProxy(ctx context.Context, qp *QueryProxy) {
 	onc.Do(func() {
 		log.Println("starting query proxy")
-		go qp.log.Start(ctx)
+		go qp.log.Init(ctx)
 		go qp.Init(ctx)
 		query, done := gactor.NewAddTableQuery(ctx, []byte("default"))
 		defer close(done)

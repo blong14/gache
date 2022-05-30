@@ -10,24 +10,32 @@ import (
 	glog "github.com/blong14/gache/internal/logging"
 )
 
-// WAL implements gactors.Actor
-type WAL struct {
-	inbox         chan []*gactors.Query
+// Log implements gactors.Actor
+type Log struct {
+	inbox         chan *gactors.Query
+	batch         chan []*gactors.Query
 	done          chan struct{}
 	impl          *list.List
 	subscriptions []gactors.Actor
 }
 
-func New(subs ...gactors.Actor) *WAL {
-	return &WAL{
+// Log implements Actor/Streamer interfaces
+var (
+	_ gactors.Actor    = &Log{}
+	_ gactors.Streamer = &Log{}
+)
+
+func New(subs ...gactors.Actor) *Log {
+	return &Log{
 		impl:          list.New(),
-		inbox:         make(chan []*gactors.Query),
 		done:          make(chan struct{}),
+		batch:         make(chan []*gactors.Query),
+		inbox:         make(chan *gactors.Query),
 		subscriptions: subs,
 	}
 }
 
-func (w *WAL) Start(ctx context.Context) {
+func (w *Log) Init(ctx context.Context) {
 	glog.Track("%T waiting for work", w)
 	for _, sub := range w.subscriptions {
 		go sub.Init(ctx)
@@ -41,7 +49,15 @@ func (w *WAL) Start(ctx context.Context) {
 				sub.Close(ctx)
 			}
 			return
-		case queries, ok := <-w.inbox:
+		case query, ok := <-w.inbox:
+			if !ok {
+				return
+			}
+			w.impl.PushBack(query)
+			for _, sub := range w.subscriptions {
+				go sub.Execute(query.Context(), query)
+			}
+		case queries, ok := <-w.batch:
 			if !ok {
 				return
 			}
@@ -59,14 +75,22 @@ func (w *WAL) Start(ctx context.Context) {
 	}
 }
 
-func (w *WAL) Stop(_ context.Context) {
+func (w *Log) Close(_ context.Context) {
 	close(w.done)
 }
 
-func (w *WAL) Execute(ctx context.Context, entries ...*gactors.Query) {
+func (w *Log) Execute(ctx context.Context, entry *gactors.Query) {
 	select {
 	case <-w.done:
 	case <-ctx.Done():
-	case w.inbox <- entries:
+	case w.inbox <- entry:
+	}
+}
+
+func (w *Log) ExecuteMany(ctx context.Context, entries ...*gactors.Query) {
+	select {
+	case <-w.done:
+	case <-ctx.Done():
+	case w.batch <- entries:
 	}
 }

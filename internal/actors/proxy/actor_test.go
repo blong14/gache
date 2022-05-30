@@ -2,12 +2,12 @@ package proxy_test
 
 import (
 	"context"
+	gproxy "github.com/blong14/gache/internal/actors/proxy"
+	gwal "github.com/blong14/gache/internal/actors/wal"
 	"testing"
 	"time"
 
 	gactors "github.com/blong14/gache/internal/actors"
-	gproxy "github.com/blong14/gache/internal/proxy"
-	gwal "github.com/blong14/gache/internal/wal"
 )
 
 func TestQueryProxy_Execute(t *testing.T) {

@@ -3,6 +3,7 @@ package io
 import (
 	"context"
 	"encoding/json"
+	gproxy "github.com/blong14/gache/internal/actors/proxy"
 	"io"
 	"log"
 	"net/http"
@@ -11,7 +12,6 @@ import (
 	gactors "github.com/blong14/gache/internal/actors"
 	ghttp "github.com/blong14/gache/internal/io/http"
 	glog "github.com/blong14/gache/internal/logging"
-	gproxy "github.com/blong14/gache/internal/proxy"
 )
 
 func HealthzService(w http.ResponseWriter, _ *http.Request) {

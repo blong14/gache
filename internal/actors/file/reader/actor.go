@@ -10,8 +10,8 @@ import (
 	glog "github.com/blong14/gache/internal/logging"
 )
 
-// implements Actor interface
-type loader struct {
+// Reader implements Actor interface
+type Reader struct {
 	done  chan struct{}
 	inbox chan *gactors.Query
 	table gactors.Actor
@@ -19,7 +19,7 @@ type loader struct {
 }
 
 func New(table gactors.Actor) gactors.Actor {
-	return &loader{
+	return &Reader{
 		inbox: make(chan *gactors.Query),
 		done:  make(chan struct{}),
 		table: table,
@@ -27,7 +27,7 @@ func New(table gactors.Actor) gactors.Actor {
 	}
 }
 
-func (f *loader) Init(ctx context.Context) {
+func (f *Reader) Init(ctx context.Context) {
 	glog.Track("%T waiting for work", f)
 	defer f.Close(ctx)
 	for {
@@ -69,11 +69,11 @@ func (f *loader) Init(ctx context.Context) {
 	}
 }
 
-func (f *loader) Close(_ context.Context) {
+func (f *Reader) Close(_ context.Context) {
 	close(f.done)
 }
 
-func (f *loader) Execute(ctx context.Context, query *gactors.Query) {
+func (f *Reader) Execute(ctx context.Context, query *gactors.Query) {
 	select {
 	case <-f.done:
 	case <-ctx.Done():

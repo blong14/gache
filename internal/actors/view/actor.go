@@ -8,8 +8,8 @@ import (
 	glog "github.com/blong14/gache/internal/logging"
 )
 
-// implements Actor
-type tableImpl struct {
+// Table implements Actor
+type Table struct {
 	concurrent bool
 	inbox      chan *gactors.Query
 	done       chan struct{}
@@ -18,7 +18,7 @@ type tableImpl struct {
 }
 
 func New(opts *gcache.TableOpts) gactors.Actor {
-	return &tableImpl{
+	return &Table{
 		concurrent: opts.Concurrent,
 		name:       opts.TableName,
 		impl:       gcache.NewTable(opts),
@@ -27,7 +27,7 @@ func New(opts *gcache.TableOpts) gactors.Actor {
 	}
 }
 
-func (va *tableImpl) Init(parentCtx context.Context) {
+func (va *Table) Init(parentCtx context.Context) {
 	glog.Track("%T %s waiting for work", va, va.name)
 	for {
 		select {
@@ -83,11 +83,11 @@ func (va *tableImpl) Init(parentCtx context.Context) {
 	}
 }
 
-func (va *tableImpl) Close(_ context.Context) {
+func (va *Table) Close(_ context.Context) {
 	close(va.done)
 }
 
-func (va *tableImpl) Execute(ctx context.Context, query *gactors.Query) {
+func (va *Table) Execute(ctx context.Context, query *gactors.Query) {
 	select {
 	case <-va.done:
 	case <-ctx.Done():

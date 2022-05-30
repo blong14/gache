@@ -2,7 +2,8 @@ package main
 
 import (
 	"context"
-	"github.com/blong14/gache/internal/proxy"
+	proxy2 "github.com/blong14/gache/internal/actors/proxy"
+	gwal "github.com/blong14/gache/internal/actors/wal"
 	"log"
 	"os"
 	"os/signal"
@@ -23,7 +24,6 @@ import (
 	gio "github.com/blong14/gache/internal/io"
 	ghttp "github.com/blong14/gache/internal/io/http"
 	grpc "github.com/blong14/gache/internal/io/rpc"
-	gwal "github.com/blong14/gache/internal/wal"
 )
 
 const (
@@ -73,23 +73,23 @@ func main() {
 		gmetrics.New(),
 		grepl.New(client),
 	)
-	qp, err := proxy.NewQueryProxy(wal)
+	qp, err := proxy2.NewQueryProxy(wal)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	rpcSRV := ghttp.Server(":8080")
-	go grpc.Start(rpcSRV, proxy.RpcHandlers(qp))
+	go grpc.Start(rpcSRV, proxy2.RpcHandlers(qp))
 
 	httpSRV := ghttp.Server(":8081")
 	go ghttp.Start(httpSRV, gio.HttpHandlers(qp))
 
-	proxy.StartProxy(ctx, qp)
+	proxy2.StartProxy(ctx, qp)
 
 	s := <-sigint
 	log.Printf("received %s signal\n", s)
 	ghttp.Stop(ctx, httpSRV, rpcSRV)
-	proxy.StopProxy(ctx, qp)
+	proxy2.StopProxy(ctx, qp)
 	errs := gerrors.Append(tp.ForceFlush(ctx), tp.Shutdown(ctx))
 	if errs.ErrorOrNil() != nil {
 		log.Println(errs)
