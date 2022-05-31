@@ -3,8 +3,8 @@ init:
 	~/sdk/go1.18/bin/go mod vendor
 
 bench: clean
-	~/sdk/go1.18/bin/go test sync -cpu=1 -bench=BenchmarkLoad -benchmem -run=XXX
-	~/sdk/go1.18/bin/go test -v -cpu=1 -bench=Sorted -run=XXX ./...
+	# ~/sdk/go1.18/bin/go test sync -cpu=1 -bench=BenchmarkLoad -benchmem -run=XXX
+	~/sdk/go1.18/bin/go test -v -cpu=8 -bench=BenchmarkConcurrent -run=XXX ./...
 
 docs:
 	~/sdk/go1.18/bin/go doc -all
