@@ -9,13 +9,14 @@ import (
 )
 
 func TestReader_ViewGet(t *testing.T) {
+	t.Parallel()
 	// given
 	k := []byte("key")
 	expected := []byte("value")
 	v := gache.NewTable(
 		&gache.TableOpts{
 			WithSkipList: func() *gskl.SkipList[[]byte, []byte] {
-				impl := gskl.New[[]byte, []byte](bytes.Compare)
+				impl := gskl.New[[]byte, []byte](bytes.Compare, bytes.Equal)
 				impl.Set(k, expected)
 				return impl
 			},

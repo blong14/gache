@@ -1,15 +1,20 @@
 package sorted_test
 
 import (
-	gskl "github.com/blong14/gache/internal/cache/sorted/skiplist"
-	gtable "github.com/blong14/gache/internal/cache/sorted/tablemap"
-	gtree "github.com/blong14/gache/internal/cache/sorted/treemap"
+	"bytes"
+	"fmt"
+	"math/rand"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 	"testing"
+  
+  	gskl "github.com/blong14/gache/internal/cache/sorted/skiplist"
+	gtable "github.com/blong14/gache/internal/cache/sorted/tablemap"
+	gtree "github.com/blong14/gache/internal/cache/sorted/treemap"
 )
 
 func newSyncMap(b *testing.B, hits int) *sync.Map {
@@ -41,7 +46,7 @@ func newTreeMap(b *testing.B, hits int) *gtree.TreeMap[string, string] {
 
 func newSkipList(b *testing.B, hits int) *gskl.SkipList[string, string] {
 	b.Helper()
-	list := gskl.New[string, string](strings.Compare)
+	list := gskl.New[string, string](strings.Compare, strings.EqualFold)
 	for i := 0; i < hits; i++ {
 		list.Set(strconv.Itoa(i), strconv.Itoa(i))
 	}
@@ -154,4 +159,54 @@ func BenchmarkConcurrent_Range(b *testing.B) {
 			}
 		},
 	})
+}
+
+func Benchmark_ReadWriteMap(b *testing.B) {
+	for i := 0; i <= 10; i++ {
+		readFrac := float32(i) / 10.0
+		b.Run(fmt.Sprintf("map read_%d", i*10), func(b *testing.B) {
+			m := make(map[string]struct{})
+			var mutex sync.RWMutex
+			b.ResetTimer()
+			var count int
+			b.RunParallel(func(pb *testing.PB) {
+				rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+				key := strconv.Itoa(rng.Intn(100))
+				for pb.Next() {
+					if rng.Float32() < readFrac {
+						mutex.RLock()
+						_, ok := m[key]
+						mutex.RUnlock()
+						if ok {
+							count++
+						}
+					} else {
+						mutex.Lock()
+						m[key] = struct{}{}
+						mutex.Unlock()
+					}
+				}
+			})
+		})
+
+		b.Run(fmt.Sprintf("skl read_%d", i*10), func(b *testing.B) {
+			m := gskl.New[[]byte, struct{}](bytes.Compare, bytes.Equal)
+			b.ResetTimer()
+			var count int
+			b.RunParallel(func(pb *testing.PB) {
+				rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+				for pb.Next() {
+					key := []byte(strconv.Itoa(rng.Intn(100)))
+					if rng.Float32() < readFrac {
+						_, ok := m.Get(key)
+						if ok {
+							count++
+						}
+					} else {
+						m.Set(key, struct{}{})
+					}
+				}
+			})
+		})
+	}
 }

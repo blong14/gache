@@ -13,7 +13,7 @@ import (
 )
 
 func assertMatch(t *testing.T, want []byte, got []byte) {
-	if !(bytes.Compare(want, got) == 0) {
+	if !bytes.Equal(want, got) {
 		t.Errorf("want %s got %s", want, got)
 	}
 }
@@ -23,16 +23,17 @@ func testGet_Hit(v gactors.Actor, expected *gactors.QueryResponse) func(t *testi
 		t.Parallel()
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		query, outbox := gactors.NewGetValueQuery([]byte("default"), expected.Key)
+		query, outbox := gactors.NewGetValueQuery(ctx, []byte("default"), expected.Key)
+		defer close(outbox)
 		go v.Execute(context.TODO(), query)
 		select {
 		case <-ctx.Done():
 			t.Error(ctx.Err())
 		case actual := <-outbox:
-			if !actual.Success {
+			if !actual.GetResponse().Success {
 				t.Errorf("not ok %v", query)
 			}
-			assertMatch(t, expected.Value, actual.Value)
+			assertMatch(t, expected.Value, actual.GetResponse().Value)
 		}
 	}
 }
@@ -43,7 +44,7 @@ func TestViewActor_Get(t *testing.T) {
 	ctx := context.TODO()
 	opts := &gcache.TableOpts{
 		WithSkipList: func() *gskl.SkipList[[]byte, []byte] {
-			impl := gskl.New[[]byte, []byte](bytes.Compare)
+			impl := gskl.New[[]byte, []byte](bytes.Compare, bytes.Equal)
 			impl.Set([]byte("key"), []byte("value"))
 			return impl
 		},

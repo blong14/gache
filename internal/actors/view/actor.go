@@ -3,101 +3,94 @@ package view
 import (
 	"context"
 
-	"go.opentelemetry.io/otel"
-
 	gactors "github.com/blong14/gache/internal/actors"
 	gcache "github.com/blong14/gache/internal/cache"
 	glog "github.com/blong14/gache/internal/logging"
 )
 
-// implements Actor
-type tableImpl struct {
-	inbox chan *gactors.Query
-	done  chan struct{}
-	impl  gcache.Table
-	name  []byte
+// Table implements Actor
+type Table struct {
+	concurrent bool
+	inbox      chan *gactors.Query
+	done       chan struct{}
+	impl       gcache.Table
+	name       []byte
 }
 
 func New(opts *gcache.TableOpts) gactors.Actor {
-	return &tableImpl{
-		name:  opts.TableName,
-		impl:  gcache.NewTable(opts),
-		inbox: make(chan *gactors.Query),
-		done:  make(chan struct{}),
+	return &Table{
+		concurrent: opts.Concurrent,
+		name:       opts.TableName,
+		impl:       gcache.NewTable(opts),
+		inbox:      make(chan *gactors.Query),
+		done:       make(chan struct{}),
 	}
 }
 
-func (va *tableImpl) Init(ctx context.Context) {
+func (va *Table) Init(parentCtx context.Context) {
 	glog.Track("%T %s waiting for work", va, va.name)
 	for {
 		select {
-		case <-ctx.Done():
+		case <-parentCtx.Done():
 			return
 		case <-va.done:
 			return
 		case query, ok := <-va.inbox:
 			if !ok {
-				if query != nil {
-					query.Finish(ctx)
-				}
 				return
 			}
-			spanCtx, span := otel.Tracer("query-view").Start(query.Context(), "query-view:proxy")
+			queryCtx := query.Context()
 			switch query.Header.Inst {
 			case gactors.GetValue:
-				go func(ctx context.Context) {
-					defer query.Finish(spanCtx)
+				go func(ctx context.Context, q *gactors.Query) {
 					var resp gactors.QueryResponse
-					if value, ok := va.impl.Get(query.Key); ok {
+					if value, ok := va.impl.Get(q.Key); ok {
 						resp = gactors.QueryResponse{
-							Key:     query.Key,
+							Key:     q.Key,
 							Value:   value,
 							Success: true,
 						}
 					}
-					query.OnResult(spanCtx, resp)
-				}(query.Context())
+					q.Done(resp)
+				}(queryCtx, query)
 			case gactors.Print:
-				go func(ctx context.Context) {
-					defer query.Finish(spanCtx)
+				go func(ctx context.Context, q *gactors.Query) {
 					va.impl.Print()
-					var resp gactors.QueryResponse
-					resp.Success = true
-					query.OnResult(spanCtx, resp)
-				}(query.Context())
+					q.Done(gactors.QueryResponse{Success: true})
+				}(queryCtx, query)
+			case gactors.Range:
+				go func(ctx context.Context, q *gactors.Query) {
+					va.impl.Range(ctx)
+					q.Done(gactors.QueryResponse{Success: true})
+				}(queryCtx, query)
 			case gactors.SetValue:
-				go func(ctx context.Context) {
-					defer query.Finish(spanCtx)
-					va.impl.TraceSet(spanCtx, query.Key, query.Value)
-					var resp gactors.QueryResponse
-					resp.Key = query.Key
-					resp.Value = query.Value
-					resp.Success = true
-					query.OnResult(spanCtx, resp)
-				}(spanCtx)
+				go func(ctx context.Context, q *gactors.Query) {
+					va.impl.TraceSet(ctx, q.Key, q.Value)
+					q.Done(gactors.QueryResponse{Success: true, Key: q.Key, Value: q.Value})
+				}(queryCtx, query)
+			case gactors.BatchSetValue:
+				go func(ctx context.Context, q *gactors.Query) {
+					for _, kv := range q.Values {
+						if kv.Valid() {
+							va.impl.TraceSet(ctx, kv.Key, kv.Value)
+						}
+					}
+					q.Done(gactors.QueryResponse{Success: true})
+				}(queryCtx, query)
 			default:
-				query.Finish(ctx)
 			}
-			span.End()
 		}
 	}
 }
 
-func (va *tableImpl) Close(_ context.Context) {
-	if va.done == nil && va.inbox == nil {
-		return
-	}
+func (va *Table) Close(_ context.Context) {
 	close(va.done)
-	close(va.inbox)
 }
 
-func (va *tableImpl) Execute(ctx context.Context, query *gactors.Query) {
-	if va.inbox == nil {
-		return
-	}
+func (va *Table) Execute(ctx context.Context, query *gactors.Query) {
 	select {
-	case <-ctx.Done():
 	case <-va.done:
+	case <-ctx.Done():
 	case va.inbox <- query:
 	}
 }

@@ -1,47 +1,72 @@
+//go:build !race
+
 package skiplist_test
 
 import (
 	"bytes"
+	"fmt"
 	"strconv"
+  "sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	glist "github.com/blong14/gache/internal/cache/sorted/skiplist"
 )
 
 func TestGetAndSet(t *testing.T) {
-	t.Parallel()
 	// given
-	list := glist.New[[]byte, []byte](bytes.Compare)
+	list := glist.New[[]byte, []byte](bytes.Compare, bytes.Equal)
 	expected := "value"
 	keys := []string{
-		"key8",
-		"key2",
-		"key1",
-		"key5",
-		"key3",
-		"key9",
-		"key7",
-		"key4",
-		"key6",
+		"a",
+		"b",
+		"c",
+		"d",
+		"e",
+		"f",
+		"g",
+		"h",
+		"i",
+		"j",
+		"k",
+		"l",
+		"m",
+		"n",
+		"o",
 	}
 
-	done := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
+		// when
+		for i := 0; i < 1000; i++ {
+			list.Set([]byte(strconv.Itoa(i)), []byte("foo"))
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
 		// when
 		for _, key := range keys {
 			list.Set([]byte(key), []byte(expected))
 		}
-		done <- struct{}{}
 	}()
 
-	<-done
+	time.Sleep(1 * time.Second)
+	wg.Wait()
 	for _, key := range keys {
 		if value, ok := list.Get([]byte(key)); !ok {
 			t.Errorf("missing key %s %s", key, value)
 		}
 	}
 	list.Print()
+	list.Range(func(k, v any) bool {
+		fmt.Printf("%s\n", k)
+		return true
+	})
 	_, ok := list.Get([]byte("missing"))
 	if ok {
 		t.Error("key should be missing")
@@ -55,7 +80,7 @@ type bench struct {
 }
 
 func newSkipList() *glist.SkipList[[]byte, []byte] {
-	return glist.New[[]byte, []byte](bytes.Compare)
+	return glist.New[[]byte, []byte](bytes.Compare, bytes.Equal)
 }
 
 func benchMap(b *testing.B, bench bench) {

@@ -12,5 +12,5 @@ type Actor interface {
 
 type Streamer interface {
 	Actor
-	OnResult() <-chan []*Query
+	ExecuteMany(ctx context.Context, query ...*Query)
 }

@@ -3,6 +3,7 @@ package io
 import (
 	"context"
 	"encoding/json"
+	gproxy "github.com/blong14/gache/internal/actors/proxy"
 	"io"
 	"log"
 	"net/http"
@@ -11,7 +12,6 @@ import (
 	gactors "github.com/blong14/gache/internal/actors"
 	ghttp "github.com/blong14/gache/internal/io/http"
 	glog "github.com/blong14/gache/internal/logging"
-	gproxy "github.com/blong14/gache/internal/proxy"
 )
 
 func HealthzService(w http.ResponseWriter, _ *http.Request) {
@@ -37,10 +37,11 @@ func GetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 
 		db := []byte(database)
 		key := []byte(urlQuery.Get("key"))
-		query, outbox := gactors.NewGetValueQuery(db, key)
 
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
+		query, outbox := gactors.NewGetValueQuery(ctx, db, key)
+		defer close(outbox)
 		go qp.Execute(ctx, query)
 
 		var status int
@@ -53,7 +54,7 @@ func GetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 			case !ok:
 				glog.Track("%s", r.Context().Err())
 				status = http.StatusInternalServerError
-			case result.Success:
+			case result.GetResponse().Success:
 				resp["status"] = "ok"
 				resp["key"] = string(key)
 				resp["value"] = string(result.Value)
@@ -91,9 +92,10 @@ func SetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 			return
 		}
 
-		query, outbox := gactors.NewSetValueQuery(req.Table, req.Key, req.Value)
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
+		query, outbox := gactors.NewSetValueQuery(ctx, req.Table, req.Key, req.Value)
+		defer close(outbox)
 		go qp.Execute(ctx, query)
 
 		// wait for results
@@ -104,7 +106,7 @@ func SetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 			switch {
 			case !ok:
 				ghttp.MustWriteJSON(w, r, http.StatusInternalServerError, resp)
-			case result.Success:
+			case result.GetResponse().Success:
 				resp["status"] = "ok"
 				resp["key"] = string(req.Key)
 				resp["value"] = string(req.Value)

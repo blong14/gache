@@ -3,6 +3,8 @@ package logging
 import (
 	"log"
 	"os"
+
+	genv "github.com/blong14/gache/internal/environment"
 )
 
 func init() {
@@ -13,7 +15,7 @@ func init() {
 
 // ShouldLog returns true if in DEBUG mode
 func ShouldLog() bool {
-	return os.Getenv("DEBUG") == "true"
+	return genv.Debug()
 }
 
 // Track logs information IFF the DEBUG env variable is "true"

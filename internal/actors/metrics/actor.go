@@ -7,20 +7,20 @@ import (
 	glog "github.com/blong14/gache/internal/logging"
 )
 
-// implements Actor interface
-type collector struct {
+// Collector implements Actor interface
+type Collector struct {
 	inbox chan *gactors.Query
 	done  chan struct{}
 }
 
 func New() gactors.Actor {
-	return &collector{
+	return &Collector{
 		inbox: make(chan *gactors.Query),
 		done:  make(chan struct{}),
 	}
 }
 
-func (m *collector) Init(ctx context.Context) {
+func (m *Collector) Init(ctx context.Context) {
 	glog.Track("%T waiting for work", m)
 	defer glog.Track("%T stopped", m)
 	for {
@@ -39,16 +39,14 @@ func (m *collector) Init(ctx context.Context) {
 	}
 }
 
-func (m *collector) Close(_ context.Context) {
-	glog.Track("%T stopping...", m)
-	close(m.inbox)
+func (m *Collector) Close(_ context.Context) {
 	close(m.done)
 }
 
-func (m *collector) Execute(ctx context.Context, query *gactors.Query) {
+func (m *Collector) Execute(ctx context.Context, query *gactors.Query) {
 	select {
-	case <-ctx.Done():
 	case <-m.done:
+	case <-ctx.Done():
 	case m.inbox <- query:
 	}
 }

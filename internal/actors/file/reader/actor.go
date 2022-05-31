@@ -2,112 +2,81 @@ package reader
 
 import (
 	"context"
+	"log"
+	"sync"
+
 	gactors "github.com/blong14/gache/internal/actors"
 	gfile "github.com/blong14/gache/internal/io/file"
 	glog "github.com/blong14/gache/internal/logging"
-	"log"
 )
 
-// implements Actor interface
-type loader struct {
-	done   chan struct{}
-	inbox  chan *gactors.Query
-	outbox chan []gfile.KeyValue
+// Reader implements Actor interface
+type Reader struct {
+	done  chan struct{}
+	inbox chan *gactors.Query
+	table gactors.Actor
+	scnr  *gfile.Scanner
 }
 
-func New() gactors.Streamer {
-	return &loader{
-		inbox:  make(chan *gactors.Query),
-		outbox: make(chan []gfile.KeyValue),
-		done:   make(chan struct{}),
+func New(table gactors.Actor) gactors.Actor {
+	return &Reader{
+		inbox: make(chan *gactors.Query),
+		done:  make(chan struct{}),
+		table: table,
+		scnr:  gfile.NewScanner(),
 	}
 }
 
-func (f *loader) Init(ctx context.Context) {
+func (f *Reader) Init(ctx context.Context) {
 	glog.Track("%T waiting for work", f)
+	defer f.Close(ctx)
 	for {
 		select {
-		case <-ctx.Done():
-			return
 		case <-f.done:
 			return
+		case <-ctx.Done():
+			return
 		case query, ok := <-f.inbox:
-			if !ok || query.Header.Inst != gactors.Load {
+			if !ok || f.table == nil || query.Header.Inst != gactors.Load {
 				if query != nil {
-					query.Finish(ctx)
+					query.Done(gactors.QueryResponse{Success: false})
 				}
 				return
 			}
-			data, err := gfile.ReadCSV(string(query.Header.FileName))
+			buffer, err := gfile.ReadCSV(string(query.Header.FileName))
 			if err != nil {
 				log.Fatal(err)
 			}
-			buffer := make([]gfile.KeyValue, 0, len(data))
-			for _, d := range data {
-				buffer = append(buffer, d)
-				if len(buffer) >= 1000 {
+			f.scnr.Init(buffer)
+			var wg sync.WaitGroup
+			for f.scnr.Scan() {
+				query, done := gactors.NewBatchSetValueQuery(ctx, []byte("default"), f.scnr.Rows())
+				f.table.Execute(query.Context(), query)
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					defer close(done)
 					select {
 					case <-ctx.Done():
-					case <-f.done:
-					case f.outbox <- buffer:
-						buffer = []gfile.KeyValue{}
+					case <-done:
 					}
-				}
+				}()
 			}
-			if len(buffer) > 0 {
-				select {
-				case <-ctx.Done():
-				case <-f.done:
-				case f.outbox <- buffer:
-				}
-			}
-			query.OnResult(ctx, gactors.QueryResponse{Success: true})
-			query.Finish(ctx)
-			f.Close(ctx)
+			wg.Wait()
+			query.Done(gactors.QueryResponse{Success: true})
 			return
 		}
 	}
 }
 
-func (f *loader) Close(_ context.Context) {
+func (f *Reader) Close(_ context.Context) {
 	close(f.done)
-	close(f.inbox)
-	close(f.outbox)
 }
 
-func (f *loader) OnResult() <-chan []*gactors.Query {
-	out := make(chan []*gactors.Query)
-	go func() {
-		defer close(out)
-		for {
-			select {
-			case <-f.done:
-				return
-			case data := <-f.outbox:
-				buffer := make([]*gactors.Query, 0, len(data))
-				for _, d := range data {
-					query, _ := gactors.NewSetValueQuery(
-						[]byte("default"),
-						d.Key,
-						d.Value,
-					)
-					buffer = append(buffer, query)
-				}
-				select {
-				case <-f.done:
-					return
-				case out <- buffer:
-				}
-			}
-		}
-	}()
-	return out
-}
-
-func (f *loader) Execute(ctx context.Context, query *gactors.Query) {
+func (f *Reader) Execute(ctx context.Context, query *gactors.Query) {
 	select {
-	case <-ctx.Done():
 	case <-f.done:
+	case <-ctx.Done():
 	case f.inbox <- query:
 	}
 }
