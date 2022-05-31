@@ -159,34 +159,29 @@ func BenchmarkConcurrent_LoadOrStoreBalanced(b *testing.B) {
 	})
 }
 
-//
-//func BenchmarkConcurrent_LoadOrStoreCollision(b *testing.B) {
-//	benchMap(b, bench{
-//		setup: func(_ *testing.B, m *glist.SkipList[string, string]) {
-//			m.Set("key", "value")
-//		},
-//
-//		perG: func(b *testing.B, pb *testing.PB, i int, m *glist.SkipList[string, string]) {
-//			for ; pb.Next(); i++ {
-//				m.Set("key", "value")
-//			}
-//		},
-//	})
-//}
-//
-//func BenchmarkConcurrent_Range(b *testing.B) {
-//	const mapSize = 1 << 10
-//
-//	benchMap(b, bench{
-//		setup: func(_ *testing.B, m *glist.SkipList[string, string]) {
-//			for i := 0; i < mapSize; i++ {
-//				m.Set(strconv.Itoa(i), strconv.Itoa(i))
-//			}
-//		},
-//		perG: func(b *testing.B, pb *testing.PB, i int, m *glist.SkipList[string, string]) {
-//			for ; pb.Next(); i++ {
-//				m.Range(func(_, _ any) bool { return true })
-//			}
-//		},
-//	})
-//}
+func BenchmarkConcurrent_LoadOrStoreCollision(b *testing.B) {
+	benchMap(b, bench{
+		perG: func(b *testing.B, pb *testing.PB, i int, m *glist.SkipList[[]byte, []byte]) {
+			for ; pb.Next(); i++ {
+				m.Set([]byte("key"), []byte("value"))
+			}
+		},
+	})
+}
+
+func BenchmarkConcurrent_Range(b *testing.B) {
+	const mapSize = 1 << 10
+
+	benchMap(b, bench{
+		setup: func(_ *testing.B, m *glist.SkipList[[]byte, []byte]) {
+			for i := 0; i < mapSize; i++ {
+				m.Set([]byte(strconv.Itoa(i)), []byte(strconv.Itoa(i)))
+			}
+		},
+		perG: func(b *testing.B, pb *testing.PB, i int, m *glist.SkipList[[]byte, []byte]) {
+			for ; pb.Next(); i++ {
+				m.Range(func(_, _ any) bool { return true })
+			}
+		},
+	})
+}

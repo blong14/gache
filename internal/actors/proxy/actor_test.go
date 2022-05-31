@@ -55,7 +55,7 @@ func TestQueryProxy_Execute(t *testing.T) {
 	}
 }
 
-func BenchmarkConcurrent_NewQueryProxy(b *testing.B) {
+func Benchmark_NewQueryProxy(b *testing.B) {
 	b.Setenv("DEBUG", "false")
 	b.Setenv("TRACE", "false")
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Second)
