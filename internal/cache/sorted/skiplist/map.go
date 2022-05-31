@@ -34,9 +34,11 @@ var pool = sync.Pool{
 	},
 }
 
-func free(preds, succs []*mapEntry) {
-	pool.Put(preds)
-	pool.Put(succs)
+func init() {
+	for i := 0; i < 20000; i++ {
+		preds := pool.Get().([]*mapEntry)
+		pool.Put(preds)
+	}
 }
 
 type SkipList[K any, V any] struct {
@@ -48,19 +50,7 @@ type SkipList[K any, V any] struct {
 	count      uint64
 }
 
-func New[K any, V any](comp func(k, v K) int) *SkipList[K, V] {
-	return &SkipList[K, V]{
-		comparator: comp,
-		sentinal: &mapEntry{
-			lock:     make(chan struct{}, 1),
-			nexts:    [MaxHeight]*mapEntry{},
-			topLayer: MaxHeight,
-		},
-		maxHeight: MaxHeight,
-	}
-}
-
-func XNew[K any, V any](comp func(k, v K) int, eql func(k, v K) bool) *SkipList[K, V] {
+func New[K any, V any](comp func(k, v K) int, eql func(k, v K) bool) *SkipList[K, V] {
 	if eql == nil {
 		eql = func(k, v K) bool { return comp(k, v) == 0 }
 	}
@@ -127,11 +117,10 @@ func (sl *SkipList[K, V]) Range(f func(k, v any) bool) {
 }
 
 func (sl *SkipList[K, V]) Get(key K) (V, bool) {
-	var (
-		preds = pool.Get().([]*mapEntry)
-		succs = pool.Get().([]*mapEntry)
-	)
-	defer free(preds, succs)
+	preds := pool.Get().([]*mapEntry)
+	defer pool.Put(preds)
+	succs := pool.Get().([]*mapEntry)
+	defer pool.Put(succs)
 	lFound := sl.skipSearch(key, preds, succs)
 	if lFound != -1 && succs[lFound].fullyLinked && !succs[lFound].marked {
 		return succs[lFound].value.(V), true
@@ -171,11 +160,10 @@ func unlock(highestLocked int, preds []*mapEntry) {
 }
 
 func (sl *SkipList[K, V]) Set(key K, value V) {
-	var (
-		preds = pool.Get().([]*mapEntry)
-		succs = pool.Get().([]*mapEntry)
-	)
-	defer free(preds, succs)
+	preds := pool.Get().([]*mapEntry)
+	defer pool.Put(preds)
+	succs := pool.Get().([]*mapEntry)
+	defer pool.Put(succs)
 	var (
 		topLayer      = sl.randomHeight()
 		valid         = true

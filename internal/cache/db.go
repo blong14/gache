@@ -97,7 +97,7 @@ func NewTable(o *TableOpts) Table {
 	if o.WithSkipList != nil {
 		xdb = o.WithSkipList()
 	} else {
-		xdb = gskl.XNew[[]byte, []byte](bytes.Compare, bytes.Equal)
+		xdb = gskl.New[[]byte, []byte](bytes.Compare, bytes.Equal)
 	}
 	return &DB{impl: xdb}
 }

@@ -46,7 +46,7 @@ func newTreeMap(b *testing.B, hits int) *gtree.TreeMap[string, string] {
 
 func newSkipList(b *testing.B, hits int) *gskl.SkipList[string, string] {
 	b.Helper()
-	list := gskl.XNew[string, string](strings.Compare, strings.EqualFold)
+	list := gskl.New[string, string](strings.Compare, strings.EqualFold)
 	for i := 0; i < hits; i++ {
 		list.Set(strconv.Itoa(i), strconv.Itoa(i))
 	}
@@ -324,14 +324,13 @@ func BenchmarkConcurrent_ReadWriteMap(b *testing.B) {
 	for i := 0; i <= 10; i++ {
 		readFrac := float32(i) / 10.0
 		b.Run(fmt.Sprintf("map read_%d", i*10), func(b *testing.B) {
-			b.Skip("ske")
 			m := make(map[string]struct{})
 			var mutex sync.RWMutex
 			b.ResetTimer()
 			var count int
 			b.RunParallel(func(pb *testing.PB) {
 				rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-				key := strconv.Itoa(rng.Intn(10))
+				key := strconv.Itoa(rng.Intn(100))
 				for pb.Next() {
 					if rng.Float32() < readFrac {
 						mutex.RLock()
@@ -350,20 +349,20 @@ func BenchmarkConcurrent_ReadWriteMap(b *testing.B) {
 		})
 
 		b.Run(fmt.Sprintf("skl read_%d", i*10), func(b *testing.B) {
-			m := gskl.XNew[[]byte, []byte](bytes.Compare, bytes.Equal)
+			m := gskl.New[[]byte, struct{}](bytes.Compare, bytes.Equal)
 			b.ResetTimer()
 			var count int
 			b.RunParallel(func(pb *testing.PB) {
 				rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 				for pb.Next() {
-					key := []byte(strconv.Itoa(rng.Intn(10)))
+					key := []byte(strconv.Itoa(rng.Intn(100)))
 					if rng.Float32() < readFrac {
 						_, ok := m.Get(key)
 						if ok {
 							count++
 						}
 					} else {
-						m.Set(key, key)
+						m.Set(key, struct{}{})
 					}
 				}
 			})

@@ -16,7 +16,7 @@ import (
 
 func TestGetAndSet(t *testing.T) {
 	// given
-	list := glist.XNew[[]byte, []byte](bytes.Compare, bytes.Equal)
+	list := glist.New[[]byte, []byte](bytes.Compare, bytes.Equal)
 	expected := "value"
 	keys := []string{
 		"a",
@@ -41,8 +41,8 @@ func TestGetAndSet(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		// when
-		for _, key := range keys {
-			list.Set([]byte(key), []byte(expected))
+		for i := 0; i < 1000; i++ {
+			list.Set([]byte(strconv.Itoa(i)), []byte("foo"))
 		}
 	}()
 
@@ -51,7 +51,7 @@ func TestGetAndSet(t *testing.T) {
 		defer wg.Done()
 		// when
 		for _, key := range keys {
-			list.Set([]byte(key), []byte("foo"))
+			list.Set([]byte(key), []byte(expected))
 		}
 	}()
 
@@ -80,7 +80,7 @@ type bench struct {
 }
 
 func newSkipList() *glist.SkipList[[]byte, []byte] {
-	return glist.XNew[[]byte, []byte](bytes.Compare, bytes.Equal)
+	return glist.New[[]byte, []byte](bytes.Compare, bytes.Equal)
 }
 
 func benchMap(b *testing.B, bench bench) {
