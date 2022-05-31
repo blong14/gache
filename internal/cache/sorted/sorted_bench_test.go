@@ -9,9 +9,10 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 	"testing"
   
-  gskl "github.com/blong14/gache/internal/cache/sorted/skiplist"
+  	gskl "github.com/blong14/gache/internal/cache/sorted/skiplist"
 	gtable "github.com/blong14/gache/internal/cache/sorted/tablemap"
 	gtree "github.com/blong14/gache/internal/cache/sorted/treemap"
 )
