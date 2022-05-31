@@ -6,7 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"strconv"
-	"sync"
+  "sync"
 	"sync/atomic"
 	"testing"
 	"time"
