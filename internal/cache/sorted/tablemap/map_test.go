@@ -120,7 +120,6 @@ func newMap() *gtable.TableMap[string, string] {
 
 func benchMap(b *testing.B, bench bench) {
 	b.Run("tablemap benchmark", func(b *testing.B) {
-		b.Skip("skipping...")
 		m := newMap()
 		if bench.setup != nil {
 			bench.setup(b, m)
