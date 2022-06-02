@@ -42,7 +42,7 @@ func (r *QueryReplicator) Init(ctx context.Context) {
 				continue
 			}
 			switch query.Header.Inst {
-			case gactors.AddTable, gactors.SetValue:
+			case gactors.AddTable, gactors.BatchSetValue, gactors.SetValue:
 				r.errs = gerrors.Append(
 					r.errs,
 					gerrors.OnlyError(gproxy.PublishQuery(r.client, query)),

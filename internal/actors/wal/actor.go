@@ -35,18 +35,18 @@ func New(subs ...gactors.Actor) *Log {
 	}
 }
 
-func (w *Log) Init(ctx context.Context) {
+func (w *Log) Init(parentCtx context.Context) {
 	glog.Track("%T waiting for work", w)
 	for _, sub := range w.subscriptions {
-		go sub.Init(ctx)
+		go sub.Init(parentCtx)
 	}
 	for {
 		select {
-		case <-ctx.Done():
+		case <-parentCtx.Done():
 			return
 		case <-w.done:
 			for _, sub := range w.subscriptions {
-				sub.Close(ctx)
+				sub.Close(parentCtx)
 			}
 			return
 		case query, ok := <-w.inbox:
@@ -55,7 +55,7 @@ func (w *Log) Init(ctx context.Context) {
 			}
 			w.impl.PushBack(query)
 			for _, sub := range w.subscriptions {
-				go sub.Execute(query.Context(), query)
+				go sub.Execute(parentCtx, query)
 			}
 		case queries, ok := <-w.batch:
 			if !ok {

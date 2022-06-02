@@ -2,12 +2,14 @@ package proxy_test
 
 import (
 	"context"
-	gproxy "github.com/blong14/gache/internal/actors/proxy"
-	gwal "github.com/blong14/gache/internal/actors/wal"
+	"math/rand"
+	"strconv"
 	"testing"
 	"time"
 
 	gactors "github.com/blong14/gache/internal/actors"
+	gproxy "github.com/blong14/gache/internal/actors/proxy"
+	gwal "github.com/blong14/gache/internal/actors/wal"
 )
 
 func TestQueryProxy_Execute(t *testing.T) {
@@ -72,16 +74,82 @@ func Benchmark_NewQueryProxy(b *testing.B) {
 		b.ReportAllocs()
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
-				start := time.Now()
-				query, done := gactors.NewLoadFromFileQuery(ctx, []byte("default"), []byte("i.csv"))
+				query, done := gactors.NewLoadFromFileQuery(ctx, []byte("default"), []byte("j.csv"))
 				qp.Execute(ctx, query)
 				result := <-done
 				if !result.GetResponse().Success {
 					b.Error("not ok")
 				}
-				b.ReportMetric(float64(time.Since(start).Milliseconds()), "ms")
 				close(done)
 			}
 		})
+	})
+}
+
+func BenchmarkConcurrent_QueryProxy(b *testing.B) {
+	b.Setenv("DEBUG", "false")
+	b.Setenv("TRACE", "false")
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Second)
+	qp, err := gproxy.NewQueryProxy(gwal.New())
+	if err != nil {
+		b.Error(err)
+	}
+	go gproxy.StartProxy(ctx, qp)
+	b.Cleanup(func() {
+		gproxy.StopProxy(ctx, qp)
+		cancel()
+	})
+
+	readFrac := float32(3) / 10.0
+	b.Run("skiplist", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		var count int
+		b.RunParallel(func(pb *testing.PB) {
+			rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+			for pb.Next() {
+				key := strconv.Itoa(rng.Intn(100))
+				var done chan *gactors.Query
+				var query *gactors.Query
+				if rng.Float32() < readFrac {
+					query, done = gactors.NewGetValueQuery(ctx, []byte("skiplist"), []byte(key))
+				} else {
+					query, done = gactors.NewSetValueQuery(ctx, []byte("skiplist"), []byte(key), []byte(""))
+				}
+				qp.Execute(ctx, query)
+				result, ok := <-done
+				if ok && result.GetResponse().Success {
+					count++
+				}
+				close(done)
+			}
+		})
+		b.ReportMetric(float64(count), "cnt")
+	})
+
+	b.Run("treemap", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		var count int
+		b.RunParallel(func(pb *testing.PB) {
+			rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+			for pb.Next() {
+				key := strconv.Itoa(rng.Intn(100))
+				var done chan *gactors.Query
+				var query *gactors.Query
+				if rng.Float32() < readFrac {
+					query, done = gactors.NewGetValueQuery(ctx, []byte("treemap"), []byte(key))
+				} else {
+					query, done = gactors.NewSetValueQuery(ctx, []byte("treemap"), []byte(key), []byte(""))
+				}
+				qp.Execute(ctx, query)
+				result, ok := <-done
+				if ok && result.GetResponse().Success {
+					count++
+				}
+				close(done)
+			}
+		})
+		b.ReportMetric(float64(count), "cnt")
 	})
 }

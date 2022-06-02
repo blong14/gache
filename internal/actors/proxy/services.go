@@ -24,6 +24,7 @@ var ErrNilClient = gerrors.NewGError(errors.New("nil client"))
 type QueryService struct {
 	Proxy   *QueryProxy
 	Limiter grate.RateLimiter
+	Tracer  trace.Tracer
 }
 
 type QueryRequest struct {
@@ -37,14 +38,13 @@ type QueryResponse struct {
 
 func (qs *QueryService) OnQuery(req *QueryRequest, resp *QueryResponse) error {
 	start := time.Now()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := context.Background()
 
 	query := req.Query
 	var span trace.Span
 	if genv.TraceEnabled() {
-		tr := otel.Tracer("query-service")
-		ctx, span = tr.Start(ctx, "query-service:OnQuery")
+		ctx, span = qs.Tracer.Start(ctx, "query-service:OnQuery")
+		defer span.End()
 		span.SetAttributes(
 			attribute.Int("query-length", len(req.Queries)),
 			attribute.String("query-instruction", req.Query.Header.Inst.String()),
@@ -57,13 +57,14 @@ func (qs *QueryService) OnQuery(req *QueryRequest, resp *QueryResponse) error {
 	qry.Header = query.Header
 	qry.Key = query.Key
 	qry.Value = query.Value
+	qry.Values = query.Values
 
 	err := qs.Limiter.Wait(ctx)
 	if err != nil {
 		return gerrors.NewGError(err)
 	}
 
-	go qs.Proxy.Execute(ctx, qry)
+	qs.Proxy.Execute(ctx, qry)
 	select {
 	case <-ctx.Done():
 	case result, ok := <-done:
@@ -74,8 +75,7 @@ func (qs *QueryService) OnQuery(req *QueryRequest, resp *QueryResponse) error {
 			resp.Success = result.GetResponse().Success
 		}
 	}
-	glog.Track("%T in %s", req, time.Since(start))
-	span.End()
+	glog.Track("%T %v in %s", req, resp.Success, time.Since(start))
 	return nil
 }
 
@@ -93,6 +93,7 @@ func PublishQuery(client *rpc.Client, queries ...*gactor.Query) (*QueryResponse,
 func RpcHandlers(proxy *QueryProxy) []grpc.Handler {
 	return []grpc.Handler{
 		&QueryService{
+			Tracer: otel.Tracer("query-service"),
 			Limiter: grate.MultiLimiter(
 				rate.NewLimiter(
 					grate.Per(100, time.Millisecond),

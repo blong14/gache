@@ -2,28 +2,37 @@ package view
 
 import (
 	"context"
+	"fmt"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	gactors "github.com/blong14/gache/internal/actors"
+	gwal "github.com/blong14/gache/internal/actors/wal"
 	gcache "github.com/blong14/gache/internal/cache"
+	genv "github.com/blong14/gache/internal/environment"
 	glog "github.com/blong14/gache/internal/logging"
 )
 
 // Table implements Actor
 type Table struct {
-	concurrent bool
-	inbox      chan *gactors.Query
-	done       chan struct{}
-	impl       gcache.Table
-	name       []byte
+	log    *gwal.Log
+	tracer trace.Tracer
+	inbox  chan *gactors.Query
+	done   chan struct{}
+	impl   gcache.Table
+	name   []byte
 }
 
-func New(opts *gcache.TableOpts) gactors.Actor {
+func New(wal *gwal.Log, opts *gcache.TableOpts) gactors.Actor {
 	return &Table{
-		concurrent: opts.Concurrent,
-		name:       opts.TableName,
-		impl:       gcache.NewTable(opts),
-		inbox:      make(chan *gactors.Query),
-		done:       make(chan struct{}),
+		name:   opts.TableName,
+		tracer: otel.Tracer("table-proxy"),
+		log:    wal,
+		impl:   gcache.NewSkipListDB(opts),
+		inbox:  make(chan *gactors.Query),
+		done:   make(chan struct{}),
 	}
 }
 
@@ -40,6 +49,13 @@ func (va *Table) Init(parentCtx context.Context) {
 				return
 			}
 			queryCtx := query.Context()
+			var span trace.Span
+			if genv.TraceEnabled() {
+				queryCtx, span = va.tracer.Start(
+					queryCtx, "table-proxy:proxy",
+				)
+			}
+			va.log.Execute(parentCtx, query)
 			switch query.Header.Inst {
 			case gactors.GetValue:
 				go func(ctx context.Context, q *gactors.Query) {
@@ -60,24 +76,62 @@ func (va *Table) Init(parentCtx context.Context) {
 				}(queryCtx, query)
 			case gactors.Range:
 				go func(ctx context.Context, q *gactors.Query) {
-					va.impl.Range(ctx)
+					va.impl.Range(func(k, v any) bool {
+						select {
+						case <-ctx.Done():
+							return false
+						default:
+						}
+						fmt.Printf("%s ", k)
+						return true
+					})
 					q.Done(gactors.QueryResponse{Success: true})
 				}(queryCtx, query)
 			case gactors.SetValue:
 				go func(ctx context.Context, q *gactors.Query) {
-					va.impl.TraceSet(ctx, q.Key, q.Value)
+					var childSpan trace.Span
+					if genv.TraceEnabled() {
+						ctx, childSpan = va.tracer.Start(
+							ctx, "table-proxy:SetValue",
+						)
+						childSpan.SetAttributes(
+							attribute.Int("query-length", len(q.Values)),
+							attribute.String("query-instruction", q.Header.Inst.String()),
+						)
+					}
+					va.impl.(gcache.TableTracer).TraceSet(ctx, q.Key, q.Value)
+					if genv.TraceEnabled() {
+						childSpan.End()
+					}
 					q.Done(gactors.QueryResponse{Success: true, Key: q.Key, Value: q.Value})
 				}(queryCtx, query)
 			case gactors.BatchSetValue:
 				go func(ctx context.Context, q *gactors.Query) {
+					fmt.Printf("batch set value %d\n", len(q.Values))
+					var childSpan trace.Span
+					if genv.TraceEnabled() {
+						ctx, childSpan = va.tracer.Start(
+							ctx, "table-proxy:BatchSetValue",
+						)
+						childSpan.SetAttributes(
+							attribute.Int("query-length", len(q.Values)),
+							attribute.String("query-instruction", q.Header.Inst.String()),
+						)
+					}
 					for _, kv := range q.Values {
 						if kv.Valid() {
-							va.impl.TraceSet(ctx, kv.Key, kv.Value)
+							va.impl.(gcache.TableTracer).TraceSet(ctx, kv.Key, kv.Value)
 						}
+					}
+					if genv.TraceEnabled() {
+						childSpan.End()
 					}
 					q.Done(gactors.QueryResponse{Success: true})
 				}(queryCtx, query)
 			default:
+			}
+			if genv.TraceEnabled() {
+				span.End()
 			}
 		}
 	}

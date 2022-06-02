@@ -3,13 +3,12 @@ package view_test
 import (
 	"bytes"
 	"context"
-	"testing"
-	"time"
-
 	gactors "github.com/blong14/gache/internal/actors"
 	gview "github.com/blong14/gache/internal/actors/view"
+	gwal "github.com/blong14/gache/internal/actors/wal"
 	gcache "github.com/blong14/gache/internal/cache"
 	gskl "github.com/blong14/gache/internal/cache/sorted/skiplist"
+	"testing"
 )
 
 func assertMatch(t *testing.T, want []byte, got []byte) {
@@ -18,19 +17,17 @@ func assertMatch(t *testing.T, want []byte, got []byte) {
 	}
 }
 
-func testGet_Hit(v gactors.Actor, expected *gactors.QueryResponse) func(t *testing.T) {
+func testGet_Hit(ctx context.Context, v gactors.Actor, expected *gactors.QueryResponse) func(t *testing.T) {
 	return func(t *testing.T) {
 		t.Parallel()
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
 		query, outbox := gactors.NewGetValueQuery(ctx, []byte("default"), expected.Key)
 		defer close(outbox)
-		go v.Execute(context.TODO(), query)
+		v.Execute(query.Context(), query)
 		select {
 		case <-ctx.Done():
 			t.Error(ctx.Err())
-		case actual := <-outbox:
-			if !actual.GetResponse().Success {
+		case actual, ok := <-outbox:
+			if !ok || !actual.GetResponse().Success {
 				t.Errorf("not ok %v", query)
 			}
 			assertMatch(t, expected.Value, actual.GetResponse().Value)
@@ -41,7 +38,7 @@ func testGet_Hit(v gactors.Actor, expected *gactors.QueryResponse) func(t *testi
 func TestViewActor_Get(t *testing.T) {
 	t.Parallel()
 	// given
-	ctx := context.TODO()
+	ctx, cancel := context.WithCancel(context.Background())
 	opts := &gcache.TableOpts{
 		WithSkipList: func() *gskl.SkipList[[]byte, []byte] {
 			impl := gskl.New[[]byte, []byte](bytes.Compare, bytes.Equal)
@@ -49,14 +46,18 @@ func TestViewActor_Get(t *testing.T) {
 			return impl
 		},
 	}
-	v := gview.New(opts)
+	wal := gwal.New()
+	go wal.Init(ctx)
+	v := gview.New(wal, opts)
 	go v.Init(ctx)
 	hit := &gactors.QueryResponse{
 		Key:   []byte("key"),
 		Value: []byte("value"),
 	}
-	t.Run("hit", testGet_Hit(v, hit))
+	t.Run("hit", testGet_Hit(ctx, v, hit))
 	t.Cleanup(func() {
+		cancel()
 		v.Close(ctx)
+		wal.Close(ctx)
 	})
 }

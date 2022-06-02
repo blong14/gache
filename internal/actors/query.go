@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"sync"
+
+	gcache "github.com/blong14/gache/internal/cache"
 )
 
 type QueryInstruction int
@@ -41,6 +43,7 @@ func (i QueryInstruction) String() string {
 
 type QueryHeader struct {
 	TableName []byte
+	Opts      *gcache.TableOpts
 	FileName  []byte
 	Inst      QueryInstruction
 }

@@ -50,8 +50,8 @@ func (f *Reader) Init(ctx context.Context) {
 			f.scnr.Init(buffer)
 			var wg sync.WaitGroup
 			for f.scnr.Scan() {
-				query, done := gactors.NewBatchSetValueQuery(ctx, []byte("default"), f.scnr.Rows())
-				f.table.Execute(query.Context(), query)
+				q, done := gactors.NewBatchSetValueQuery(ctx, query.Header.TableName, f.scnr.Rows())
+				f.table.Execute(q.Context(), q)
 				wg.Add(1)
 				go func() {
 					defer wg.Done()

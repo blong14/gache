@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
 	gactor "github.com/blong14/gache/internal/actors"
@@ -14,6 +15,7 @@ import (
 	gview "github.com/blong14/gache/internal/actors/view"
 	gwal "github.com/blong14/gache/internal/actors/wal"
 	gcache "github.com/blong14/gache/internal/cache"
+	gskl "github.com/blong14/gache/internal/cache/sorted/skiplist"
 	gtree "github.com/blong14/gache/internal/cache/sorted/treemap"
 	genv "github.com/blong14/gache/internal/environment"
 	glog "github.com/blong14/gache/internal/logging"
@@ -21,9 +23,10 @@ import (
 
 // QueryProxy implements gactors.Actor interface
 type QueryProxy struct {
-	inbox chan *gactor.Query
-	done  chan struct{}
-	log   *gwal.Log
+	inbox  chan *gactor.Query
+	done   chan struct{}
+	log    *gwal.Log
+	tracer trace.Tracer
 	// table name to table actor
 	tables *gtree.TreeMap[[]byte, gactor.Actor]
 }
@@ -34,6 +37,7 @@ var _ gactor.Actor = &QueryProxy{}
 func NewQueryProxy(wal *gwal.Log) (*QueryProxy, error) {
 	return &QueryProxy{
 		log:    wal,
+		tracer: otel.Tracer("query-proxy"),
 		inbox:  make(chan *gactor.Query),
 		done:   make(chan struct{}),
 		tables: gtree.New[[]byte, gactor.Actor](bytes.Compare),
@@ -64,39 +68,45 @@ func (qp *QueryProxy) Init(parentCtx context.Context) {
 			if !ok {
 				return
 			}
-			ctx := query.Context()
+			queryCtx := query.Context()
 			var span trace.Span
 			if genv.TraceEnabled() {
-				ctx, span = otel.Tracer("query-proxy").Start(
-					ctx, "query-proxy:proxy",
+				queryCtx, span = qp.tracer.Start(
+					queryCtx, "query-proxy:proxy",
+				)
+				span.SetAttributes(
+					attribute.String("query-instruction", query.Header.Inst.String()),
 				)
 			}
-			go qp.log.Execute(ctx, query)
+			qp.log.Execute(parentCtx, query)
 			switch query.Header.Inst {
 			case gactor.AddTable:
-				table := gview.New(
-					&gcache.TableOpts{
-						Concurrent: true,
-						TableName:  query.Header.TableName,
-					},
-				)
-				go table.Init(ctx)
-				qp.tables.Set(query.Header.TableName, table)
+				var opts *gcache.TableOpts
+				if query.Header.Opts != nil {
+					opts = query.Header.Opts
+				} else {
+					opts = &gcache.TableOpts{
+						TableName: query.Header.TableName,
+					}
+				}
+				t := gview.New(qp.log, opts)
+				go t.Init(parentCtx)
+				qp.tables.Set(query.Header.TableName, t)
 				query.Done(gactor.QueryResponse{Success: true})
-			case gactor.GetValue, gactor.Print, gactor.Range, gactor.SetValue:
+			case gactor.GetValue, gactor.Print, gactor.Range, gactor.BatchSetValue, gactor.SetValue:
 				table, ok := qp.tables.Get(query.Header.TableName)
 				if !ok {
 					continue
 				}
-				go table.Execute(ctx, query)
+				table.Execute(queryCtx, query)
 			case gactor.Load:
 				table, ok := qp.tables.Get(query.Header.TableName)
 				if !ok {
 					continue
 				}
 				loader := gfile.New(table)
-				go loader.Init(ctx)
-				go loader.Execute(ctx, query)
+				go loader.Init(parentCtx)
+				loader.Execute(queryCtx, query)
 			default:
 			}
 			if genv.TraceEnabled() {
@@ -126,10 +136,32 @@ func StartProxy(ctx context.Context, qp *QueryProxy) {
 		go qp.log.Init(ctx)
 		go qp.Init(ctx)
 		query, done := gactor.NewAddTableQuery(ctx, []byte("default"))
-		defer close(done)
 		qp.Execute(ctx, query)
 		<-done
 		log.Println("default table added")
+		close(done)
+
+		query, done = gactor.NewAddTableQuery(ctx, []byte("skiplist"))
+		query.Header.Opts = &gcache.TableOpts{
+			WithSkipList: func() *gskl.SkipList[[]byte, []byte] {
+				return gskl.New[[]byte, []byte](bytes.Compare, bytes.Equal)
+			},
+		}
+		qp.Execute(ctx, query)
+		<-done
+		log.Println("skiplist table added")
+		close(done)
+
+		query, done = gactor.NewAddTableQuery(ctx, []byte("treemap"))
+		query.Header.Opts = &gcache.TableOpts{
+			WithTreeMap: func() *gtree.TreeMap[[]byte, []byte] {
+				return gtree.New[[]byte, []byte](bytes.Compare)
+			},
+		}
+		qp.Execute(ctx, query)
+		<-done
+		log.Println("treemap table added")
+		close(done)
 	})
 }
 

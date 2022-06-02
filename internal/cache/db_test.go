@@ -13,7 +13,7 @@ func TestReader_ViewGet(t *testing.T) {
 	// given
 	k := []byte("key")
 	expected := []byte("value")
-	v := gache.NewTable(
+	v := gache.NewSkipListDB(
 		&gache.TableOpts{
 			WithSkipList: func() *gskl.SkipList[[]byte, []byte] {
 				impl := gskl.New[[]byte, []byte](bytes.Compare, bytes.Equal)
