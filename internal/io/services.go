@@ -54,7 +54,7 @@ func GetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 			case !ok:
 				glog.Track("%s", r.Context().Err())
 				status = http.StatusInternalServerError
-			case result.GetResponse().Success:
+			case result.Success:
 				resp["status"] = "ok"
 				resp["key"] = string(key)
 				resp["value"] = string(result.Value)
@@ -106,7 +106,7 @@ func SetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 			switch {
 			case !ok:
 				ghttp.MustWriteJSON(w, r, http.StatusInternalServerError, resp)
-			case result.GetResponse().Success:
+			case result.Success:
 				resp["status"] = "ok"
 				resp["key"] = string(req.Key)
 				resp["value"] = string(req.Value)

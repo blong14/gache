@@ -15,17 +15,14 @@ func TestNew(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	wal := gwal.New()
-	go wal.Init(ctx)
 	table := gview.New(
 		wal,
 		&gcache.TableOpts{
 			TableName: []byte("default"),
 		},
 	)
-	go table.Init(ctx)
 
 	actor := greader.New(table)
-	go actor.Init(ctx)
 
 	query, done := gactors.NewLoadFromFileQuery(ctx, []byte("default"), []byte("i.csv"))
 	actor.Execute(ctx, query)
@@ -33,12 +30,11 @@ func TestNew(t *testing.T) {
 	case <-ctx.Done():
 		t.Error(ctx.Err())
 	case result, ok := <-done:
-		if !ok || !result.GetResponse().Success {
+		if !ok || !result.Success {
 			t.Error("data not loaded")
 		}
 	}
 	t.Cleanup(func() {
-		wal.Close(ctx)
 		cancel()
 	})
 }

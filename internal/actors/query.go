@@ -3,7 +3,6 @@ package actors
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	gcache "github.com/blong14/gache/internal/cache"
 )
@@ -56,17 +55,14 @@ type QueryResponse struct {
 
 type Query struct {
 	ctx    context.Context
-	done   chan *Query
+	done   chan QueryResponse
 	Header QueryHeader
 	Key    []byte
 	Value  []byte
 	Values []KeyValue
-
-	mtx      sync.RWMutex
-	Response QueryResponse
 }
 
-func NewQuery(ctx context.Context, outbox chan *Query) *Query {
+func NewQuery(ctx context.Context, outbox chan QueryResponse) *Query {
 	if outbox == nil {
 		q := TraceNewQuery(ctx)
 		return &q
@@ -77,7 +73,7 @@ func NewQuery(ctx context.Context, outbox chan *Query) *Query {
 func TraceNewQuery(ctx context.Context) Query {
 	return Query{
 		ctx:  ctx,
-		done: make(chan *Query, 1),
+		done: make(chan QueryResponse, 1),
 	}
 }
 
@@ -86,11 +82,8 @@ func (m *Query) String() string {
 }
 
 func (m *Query) Done(r QueryResponse) {
-	m.mtx.Lock()
-	m.Response = r
-	m.mtx.Unlock()
 	select {
-	case m.done <- m:
+	case m.done <- r:
 	default:
 	}
 }
@@ -103,13 +96,12 @@ func (m *Query) Context() context.Context {
 }
 
 func (m *Query) GetResponse() *QueryResponse {
-	m.mtx.RLock()
-	defer m.mtx.RUnlock()
-	return &m.Response
+	resp := <-m.done
+	return &resp
 }
 
-func NewGetValueQuery(ctx context.Context, db []byte, key []byte) (*Query, chan *Query) {
-	done := make(chan *Query, 1)
+func NewGetValueQuery(ctx context.Context, db []byte, key []byte) (*Query, chan QueryResponse) {
+	done := make(chan QueryResponse, 1)
 	query := NewQuery(ctx, done)
 	query.Header = QueryHeader{
 		TableName: db,
@@ -119,8 +111,8 @@ func NewGetValueQuery(ctx context.Context, db []byte, key []byte) (*Query, chan 
 	return query, done
 }
 
-func NewPrintQuery(ctx context.Context, db []byte) (*Query, chan *Query) {
-	done := make(chan *Query, 1)
+func NewPrintQuery(ctx context.Context, db []byte) (*Query, chan QueryResponse) {
+	done := make(chan QueryResponse, 1)
 	query := NewQuery(ctx, done)
 	query.Header = QueryHeader{
 		TableName: db,
@@ -129,8 +121,8 @@ func NewPrintQuery(ctx context.Context, db []byte) (*Query, chan *Query) {
 	return query, done
 }
 
-func NewRangeQuery(ctx context.Context, db []byte) (*Query, chan *Query) {
-	done := make(chan *Query, 1)
+func NewRangeQuery(ctx context.Context, db []byte) (*Query, chan QueryResponse) {
+	done := make(chan QueryResponse, 1)
 	query := NewQuery(ctx, done)
 	query.Header = QueryHeader{
 		TableName: db,
@@ -139,8 +131,8 @@ func NewRangeQuery(ctx context.Context, db []byte) (*Query, chan *Query) {
 	return query, done
 }
 
-func NewLoadFromFileQuery(ctx context.Context, db []byte, filename []byte) (*Query, chan *Query) {
-	done := make(chan *Query, 1)
+func NewLoadFromFileQuery(ctx context.Context, db []byte, filename []byte) (*Query, chan QueryResponse) {
+	done := make(chan QueryResponse, 1)
 	query := NewQuery(ctx, done)
 	query.Header = QueryHeader{
 		TableName: db,
@@ -150,8 +142,8 @@ func NewLoadFromFileQuery(ctx context.Context, db []byte, filename []byte) (*Que
 	return query, done
 }
 
-func NewSetValueQuery(ctx context.Context, db, key, value []byte) (*Query, chan *Query) {
-	done := make(chan *Query, 1)
+func NewSetValueQuery(ctx context.Context, db, key, value []byte) (*Query, chan QueryResponse) {
+	done := make(chan QueryResponse, 1)
 	query := NewQuery(ctx, done)
 	query.Header = QueryHeader{
 		TableName: db,
@@ -162,8 +154,8 @@ func NewSetValueQuery(ctx context.Context, db, key, value []byte) (*Query, chan 
 	return query, done
 }
 
-func NewBatchSetValueQuery(ctx context.Context, db []byte, values []KeyValue) (*Query, chan *Query) {
-	done := make(chan *Query, 1)
+func NewBatchSetValueQuery(ctx context.Context, db []byte, values []KeyValue) (*Query, chan QueryResponse) {
+	done := make(chan QueryResponse, 1)
 	query := NewQuery(ctx, done)
 	query.Header = QueryHeader{
 		TableName: db,
@@ -173,8 +165,8 @@ func NewBatchSetValueQuery(ctx context.Context, db []byte, values []KeyValue) (*
 	return query, done
 }
 
-func NewAddTableQuery(ctx context.Context, db []byte) (*Query, chan *Query) {
-	done := make(chan *Query, 1)
+func NewAddTableQuery(ctx context.Context, db []byte) (*Query, chan QueryResponse) {
+	done := make(chan QueryResponse, 1)
 	query := NewQuery(ctx, done)
 	query.Header = QueryHeader{
 		TableName: db,

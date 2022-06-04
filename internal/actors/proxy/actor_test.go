@@ -2,6 +2,7 @@ package proxy_test
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"strconv"
 	"testing"
@@ -22,7 +23,6 @@ func TestQueryProxy_Execute(t *testing.T) {
 	query, done := gactors.NewLoadFromFileQuery(ctx, []byte("default"), []byte("j.csv"))
 	gproxy.StartProxy(ctx, qp)
 	t.Cleanup(func() {
-		gproxy.StopProxy(ctx, qp)
 		close(done)
 		cancel()
 	})
@@ -33,7 +33,7 @@ func TestQueryProxy_Execute(t *testing.T) {
 	case <-ctx.Done():
 		t.Error(ctx.Err())
 	case result, ok := <-done:
-		if !ok || !result.GetResponse().Success {
+		if !ok || !result.Success {
 			t.Error("not ok")
 			return
 		}
@@ -50,7 +50,7 @@ func TestQueryProxy_Execute(t *testing.T) {
 	case <-ctx.Done():
 		t.Error(ctx.Err())
 	case result, ok := <-finished:
-		if !ok || !result.GetResponse().Success {
+		if !ok || !result.Success {
 			t.Error("not ok")
 			return
 		}
@@ -67,7 +67,6 @@ func Benchmark_NewQueryProxy(b *testing.B) {
 	}
 	go gproxy.StartProxy(ctx, qp)
 	b.Cleanup(func() {
-		gproxy.StopProxy(ctx, qp)
 		cancel()
 	})
 	b.Run("execute", func(b *testing.B) {
@@ -77,7 +76,7 @@ func Benchmark_NewQueryProxy(b *testing.B) {
 				query, done := gactors.NewLoadFromFileQuery(ctx, []byte("default"), []byte("j.csv"))
 				qp.Execute(ctx, query)
 				result := <-done
-				if !result.GetResponse().Success {
+				if !result.Success {
 					b.Error("not ok")
 				}
 				close(done)
@@ -96,60 +95,39 @@ func BenchmarkConcurrent_QueryProxy(b *testing.B) {
 	}
 	go gproxy.StartProxy(ctx, qp)
 	b.Cleanup(func() {
-		gproxy.StopProxy(ctx, qp)
 		cancel()
 	})
 
-	readFrac := float32(3) / 10.0
-	b.Run("skiplist", func(b *testing.B) {
-		b.ReportAllocs()
-		b.ResetTimer()
-		var count int
-		b.RunParallel(func(pb *testing.PB) {
-			rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-			for pb.Next() {
-				key := strconv.Itoa(rng.Intn(100))
-				var done chan *gactors.Query
-				var query *gactors.Query
-				if rng.Float32() < readFrac {
-					query, done = gactors.NewGetValueQuery(ctx, []byte("skiplist"), []byte(key))
-				} else {
-					query, done = gactors.NewSetValueQuery(ctx, []byte("skiplist"), []byte(key), []byte(""))
+	for _, i := range []int{3, 5, 7} {
+		readFrac := float32(i) / 10.0
+		b.Run(fmt.Sprintf("skiplist_%v", readFrac), func(b *testing.B) {
+			b.ReportAllocs()
+			b.ResetTimer()
+			var hits int
+			var misses int
+			b.RunParallel(func(pb *testing.PB) {
+				rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+				for pb.Next() {
+					key := strconv.Itoa(rng.Intn(100))
+					var done chan gactors.QueryResponse
+					var query *gactors.Query
+					if rng.Float32() < readFrac {
+						query, done = gactors.NewGetValueQuery(ctx, []byte("default"), []byte(key))
+					} else {
+						query, done = gactors.NewSetValueQuery(ctx, []byte("default"), []byte(key), []byte(""))
+					}
+					qp.Execute(ctx, query)
+					result, ok := <-done
+					if ok && result.Success {
+						hits++
+					} else {
+						misses++
+					}
+					close(done)
 				}
-				qp.Execute(ctx, query)
-				result, ok := <-done
-				if ok && result.GetResponse().Success {
-					count++
-				}
-				close(done)
-			}
+			})
+			b.ReportMetric(float64(hits), "hits")
+			b.ReportMetric(float64(misses), "misses")
 		})
-		b.ReportMetric(float64(count), "cnt")
-	})
-
-	b.Run("treemap", func(b *testing.B) {
-		b.ReportAllocs()
-		b.ResetTimer()
-		var count int
-		b.RunParallel(func(pb *testing.PB) {
-			rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-			for pb.Next() {
-				key := strconv.Itoa(rng.Intn(100))
-				var done chan *gactors.Query
-				var query *gactors.Query
-				if rng.Float32() < readFrac {
-					query, done = gactors.NewGetValueQuery(ctx, []byte("treemap"), []byte(key))
-				} else {
-					query, done = gactors.NewSetValueQuery(ctx, []byte("treemap"), []byte(key), []byte(""))
-				}
-				qp.Execute(ctx, query)
-				result, ok := <-done
-				if ok && result.GetResponse().Success {
-					count++
-				}
-				close(done)
-			}
-		})
-		b.ReportMetric(float64(count), "cnt")
-	})
+	}
 }

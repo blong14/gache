@@ -98,7 +98,6 @@ func main() {
 	case <-done:
 	}
 	log.Printf("received %s signal\n", s)
-	gproxy.StopProxy(ctx, qp)
 	errs := gerrors.Append(tp.ForceFlush(ctx), tp.Shutdown(ctx))
 	if errs.ErrorOrNil() != nil {
 		log.Println(errs)
@@ -131,9 +130,8 @@ func Accept(ctx context.Context, qp *gproxy.QueryProxy) {
 			qp.Execute(ctx, query)
 			for result := range finished {
 				fmt.Println("% --\tkey\tvalue")
-				resp := result.GetResponse()
-				if resp.Success {
-					fmt.Printf("[%s] 1.\t%s\t%s", time.Since(start), string(result.Key), resp.Value)
+				if result.Success {
+					fmt.Printf("[%s] 1.\t%s\t%s", time.Since(start), string(result.Key), result.Value)
 				}
 				break
 			}
@@ -142,7 +140,7 @@ func Accept(ctx context.Context, qp *gproxy.QueryProxy) {
 	}
 }
 
-func toQuery(ctx context.Context, tokens []string) (*gactors.Query, chan *gactors.Query) {
+func toQuery(ctx context.Context, tokens []string) (*gactors.Query, chan gactors.QueryResponse) {
 	cmd := tokens[0]
 	switch cmd {
 	case "exit":

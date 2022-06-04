@@ -1,96 +1,32 @@
 package wal
 
 import (
-	"container/list"
+	"bytes"
 	"context"
 
-	"go.opentelemetry.io/otel"
-
 	gactors "github.com/blong14/gache/internal/actors"
-	glog "github.com/blong14/gache/internal/logging"
+	gcache "github.com/blong14/gache/internal/cache"
 )
 
 // Log implements gactors.Actor
 type Log struct {
-	inbox         chan *gactors.Query
-	batch         chan []*gactors.Query
-	done          chan struct{}
-	impl          *list.List
+	impl          gcache.Table[[]byte, []byte]
 	subscriptions []gactors.Actor
 }
 
 // Log implements Actor/Streamer interfaces
-var (
-	_ gactors.Actor    = &Log{}
-	_ gactors.Streamer = &Log{}
-)
+var _ gactors.Actor = &Log{}
 
 func New(subs ...gactors.Actor) *Log {
 	return &Log{
-		impl:          list.New(),
-		done:          make(chan struct{}),
-		batch:         make(chan []*gactors.Query),
-		inbox:         make(chan *gactors.Query),
+		impl:          gcache.XNew[[]byte, []byte](bytes.Compare, bytes.Equal),
 		subscriptions: subs,
 	}
 }
 
-func (w *Log) Init(parentCtx context.Context) {
-	glog.Track("%T waiting for work", w)
+func (w *Log) Execute(ctx context.Context, query *gactors.Query) {
+	w.impl.Set(query.Key, query.Value)
 	for _, sub := range w.subscriptions {
-		go sub.Init(parentCtx)
-	}
-	for {
-		select {
-		case <-parentCtx.Done():
-			return
-		case <-w.done:
-			for _, sub := range w.subscriptions {
-				sub.Close(parentCtx)
-			}
-			return
-		case query, ok := <-w.inbox:
-			if !ok {
-				return
-			}
-			w.impl.PushBack(query)
-			for _, sub := range w.subscriptions {
-				go sub.Execute(parentCtx, query)
-			}
-		case queries, ok := <-w.batch:
-			if !ok {
-				return
-			}
-			for _, query := range queries {
-				spanCtx, span := otel.Tracer("query-wal").Start(
-					query.Context(), "query-wal:proxy",
-				)
-				w.impl.PushBack(query)
-				for _, sub := range w.subscriptions {
-					go sub.Execute(spanCtx, query)
-				}
-				span.End()
-			}
-		}
-	}
-}
-
-func (w *Log) Close(_ context.Context) {
-	close(w.done)
-}
-
-func (w *Log) Execute(ctx context.Context, entry *gactors.Query) {
-	select {
-	case <-w.done:
-	case <-ctx.Done():
-	case w.inbox <- entry:
-	}
-}
-
-func (w *Log) ExecuteMany(ctx context.Context, entries ...*gactors.Query) {
-	select {
-	case <-w.done:
-	case <-ctx.Done():
-	case w.batch <- entries:
+		go sub.Execute(ctx, query)
 	}
 }
