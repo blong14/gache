@@ -1,8 +1,8 @@
 package cache
 
-type KV interface {
-	Get(k any) (any, bool)
-	Range(func(k any, v any) bool)
-	Remove(k any) (any, bool)
-	Set(k any, v any)
+type KV[K, V any] interface {
+	Get(k K) (V, bool)
+	Range(func(k K, v V) bool)
+	Remove(k K) (V, bool)
+	Set(k K, v V)
 }

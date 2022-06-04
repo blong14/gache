@@ -51,7 +51,7 @@ func (qs *QueryService) OnQuery(req *QueryRequest, resp *QueryResponse) error {
 		)
 	}
 
-	done := make(chan *gactor.Query, 1)
+	done := make(chan gactor.QueryResponse, 1)
 	defer close(done)
 	qry := gactor.NewQuery(ctx, done)
 	qry.Header = query.Header
@@ -71,9 +71,7 @@ func (qs *QueryService) OnQuery(req *QueryRequest, resp *QueryResponse) error {
 		if !ok {
 			break
 		}
-		if result != nil {
-			resp.Success = result.GetResponse().Success
-		}
+		resp.Success = result.Success
 	}
 	glog.Track("%T %v in %s", req, resp.Success, time.Since(start))
 	return nil

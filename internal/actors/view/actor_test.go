@@ -7,7 +7,6 @@ import (
 	gview "github.com/blong14/gache/internal/actors/view"
 	gwal "github.com/blong14/gache/internal/actors/wal"
 	gcache "github.com/blong14/gache/internal/cache"
-	gskl "github.com/blong14/gache/internal/cache/sorted/skiplist"
 	"testing"
 )
 
@@ -20,17 +19,29 @@ func assertMatch(t *testing.T, want []byte, got []byte) {
 func testGet_Hit(ctx context.Context, v gactors.Actor, expected *gactors.QueryResponse) func(t *testing.T) {
 	return func(t *testing.T) {
 		t.Parallel()
-		query, outbox := gactors.NewGetValueQuery(ctx, []byte("default"), expected.Key)
+		query, outbox := gactors.NewSetValueQuery(ctx, []byte("default"), expected.Key, expected.Value)
 		defer close(outbox)
 		v.Execute(query.Context(), query)
 		select {
 		case <-ctx.Done():
 			t.Error(ctx.Err())
 		case actual, ok := <-outbox:
-			if !ok || !actual.GetResponse().Success {
+			if !ok || !actual.Success {
 				t.Errorf("not ok %v", query)
 			}
-			assertMatch(t, expected.Value, actual.GetResponse().Value)
+		}
+
+		query, outbox = gactors.NewGetValueQuery(ctx, []byte("default"), expected.Key)
+		defer close(outbox)
+		v.Execute(query.Context(), query)
+		select {
+		case <-ctx.Done():
+			t.Error(ctx.Err())
+		case actual, ok := <-outbox:
+			if !ok || !actual.Success {
+				t.Errorf("not ok %v", query)
+			}
+			assertMatch(t, expected.Value, actual.Value)
 		}
 	}
 }
@@ -40,16 +51,10 @@ func TestViewActor_Get(t *testing.T) {
 	// given
 	ctx, cancel := context.WithCancel(context.Background())
 	opts := &gcache.TableOpts{
-		WithSkipList: func() *gskl.SkipList[[]byte, []byte] {
-			impl := gskl.New[[]byte, []byte](bytes.Compare, bytes.Equal)
-			impl.Set([]byte("key"), []byte("value"))
-			return impl
-		},
+		TableName: []byte("default"),
 	}
 	wal := gwal.New()
-	go wal.Init(ctx)
 	v := gview.New(wal, opts)
-	go v.Init(ctx)
 	hit := &gactors.QueryResponse{
 		Key:   []byte("key"),
 		Value: []byte("value"),
@@ -57,7 +62,5 @@ func TestViewActor_Get(t *testing.T) {
 	t.Run("hit", testGet_Hit(ctx, v, hit))
 	t.Cleanup(func() {
 		cancel()
-		v.Close(ctx)
-		wal.Close(ctx)
 	})
 }

@@ -18,7 +18,6 @@ import (
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
 
-	gmetrics "github.com/blong14/gache/internal/actors/metrics"
 	grepl "github.com/blong14/gache/internal/actors/replication"
 	gerrors "github.com/blong14/gache/internal/errors"
 	gio "github.com/blong14/gache/internal/io"
@@ -70,7 +69,6 @@ func main() {
 	}
 
 	wal := gwal.New(
-		gmetrics.New(),
 		grepl.New(client),
 	)
 	qp, err := proxy2.NewQueryProxy(wal)
@@ -89,7 +87,6 @@ func main() {
 	s := <-sigint
 	log.Printf("received %s signal\n", s)
 	ghttp.Stop(ctx, httpSRV, rpcSRV)
-	proxy2.StopProxy(ctx, qp)
 	errs := gerrors.Append(tp.ForceFlush(ctx), tp.Shutdown(ctx))
 	if errs.ErrorOrNil() != nil {
 		log.Println(errs)

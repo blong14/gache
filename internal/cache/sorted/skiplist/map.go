@@ -19,7 +19,7 @@ type mapEntry struct {
 	value       any
 }
 
-func newMapEntry[K, V any](k K, v V) *mapEntry {
+func NewMapEntry[K, V any](k K, v V) *mapEntry {
 	return &mapEntry{
 		lock:  make(chan struct{}, 1),
 		key:   k,
@@ -35,18 +35,18 @@ var pool = sync.Pool{
 }
 
 func init() {
-	for i := 0; i < 20000; i++ {
+	for i := 0; i < 100_000; i++ {
 		preds := pool.Get().([]*mapEntry)
 		pool.Put(preds)
 	}
 }
 
 type SkipList[K any, V any] struct {
-	sentinal   *mapEntry
-	maxHeight  uint8
-	comparator func(k, v K) int
-	matcher    func(k, v K) bool
-	h          uint64
+	Sentinal   *mapEntry
+	MaxHeight  uint8
+	Comparator func(k, v K) int
+	Matcher    func(k, v K) bool
+	H          uint64
 	count      uint64
 }
 
@@ -55,32 +55,32 @@ func New[K any, V any](comp func(k, v K) int, eql func(k, v K) bool) *SkipList[K
 		eql = func(k, v K) bool { return comp(k, v) == 0 }
 	}
 	return &SkipList[K, V]{
-		comparator: comp,
-		matcher:    eql,
-		sentinal: &mapEntry{
+		Comparator: comp,
+		Matcher:    eql,
+		Sentinal: &mapEntry{
 			lock:     make(chan struct{}, 1),
 			nexts:    [MaxHeight]*mapEntry{},
 			topLayer: MaxHeight,
 		},
-		maxHeight: MaxHeight,
-		h:         uint64(0),
+		MaxHeight: MaxHeight,
+		H:         uint64(0),
 		count:     uint64(0),
 	}
 }
 
 func (sl *SkipList[K, V]) skipSearch(key K, preds, succs []*mapEntry) int {
 	lFound := -1
-	pred := sl.sentinal
+	pred := sl.Sentinal
 	var curr *mapEntry
-	for layer := int(sl.maxHeight - 1); layer >= 0; layer-- {
+	for layer := int(sl.MaxHeight - 1); layer >= 0; layer-- {
 		curr = pred.nexts[layer]
-		for curr != nil && sl.comparator(key, curr.key.(K)) > 0 {
+		for curr != nil && sl.Comparator(key, curr.key.(K)) > 0 {
 			pred = curr
 			curr = pred.nexts[layer]
 		}
 		preds[layer] = pred
 		succs[layer] = curr
-		if curr != nil && sl.matcher(key, curr.key.(K)) {
+		if curr != nil && sl.Matcher(key, curr.key.(K)) {
 			lFound = layer
 			return lFound
 		}
@@ -88,11 +88,15 @@ func (sl *SkipList[K, V]) skipSearch(key K, preds, succs []*mapEntry) int {
 	return lFound
 }
 
+func (sl *SkipList[K, V]) Remove(k K) (V, bool) {
+	return *new(V), true
+}
+
 func (sl *SkipList[K, V]) Print() {
 	out := ""
-	curr := sl.sentinal
+	curr := sl.Sentinal
 	for curr != nil {
-		for i := uint8(0); i < sl.maxHeight; i++ {
+		for i := uint8(0); i < sl.MaxHeight; i++ {
 			n := curr.nexts[i]
 			if n != nil {
 				out = out + fmt.Sprintf("\t(%s, %d)", n.key, i)
@@ -104,11 +108,11 @@ func (sl *SkipList[K, V]) Print() {
 	fmt.Println(out)
 }
 
-func (sl *SkipList[K, V]) Range(f func(k, v any) bool) {
+func (sl *SkipList[K, V]) Range(f func(k K, v V) bool) {
 	layer := 0
-	curr := sl.sentinal.nexts[layer]
+	curr := sl.Sentinal.nexts[layer]
 	for curr != nil {
-		if ok := f(curr.key, curr.value); ok {
+		if ok := f(curr.key.(K), curr.value.(V)); ok {
 			curr = curr.nexts[layer]
 		} else {
 			return
@@ -139,7 +143,7 @@ func (sl *SkipList[K, V]) randomHeight() uint64 {
 	x := idx << 13 // magic prime numbers
 	x = x >> 7
 	x = x << 17
-	return uint64(x) % uint64(sl.maxHeight)
+	return uint64(x) % uint64(sl.MaxHeight)
 }
 
 func unlock(highestLocked int, preds []*mapEntry) {
@@ -187,7 +191,7 @@ func (sl *SkipList[K, V]) Set(key K, value V) {
 			continue
 		}
 
-		height := atomic.LoadUint64(&sl.h)
+		height := atomic.LoadUint64(&sl.H)
 		for layer := uint64(0); valid && (layer <= height); layer++ {
 			pred = preds[layer]
 			succ = succs[layer]
@@ -209,7 +213,7 @@ func (sl *SkipList[K, V]) Set(key K, value V) {
 		}
 		// at this point; this thread holds all locks
 		// safe to create a new node
-		newNode := newMapEntry(key, value)
+		newNode := NewMapEntry(key, value)
 		newNode.topLayer = uint8(topLayer)
 		for layer := uint64(0); layer <= topLayer; layer++ {
 			newNode.nexts[layer] = succs[layer]
@@ -217,9 +221,9 @@ func (sl *SkipList[K, V]) Set(key K, value V) {
 		}
 		newNode.fullyLinked = true
 		atomic.AddUint64(&sl.count, 1)
-		height = atomic.LoadUint64(&sl.h)
+		height = atomic.LoadUint64(&sl.H)
 		if topLayer > height {
-			atomic.StoreUint64(&sl.h, topLayer)
+			atomic.StoreUint64(&sl.H, topLayer)
 		}
 		unlock(highestLocked, preds)
 		return

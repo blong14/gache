@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	gache "github.com/blong14/gache/internal/cache"
-	gskl "github.com/blong14/gache/internal/cache/sorted/skiplist"
 )
 
 func TestReader_ViewGet(t *testing.T) {
@@ -13,16 +12,8 @@ func TestReader_ViewGet(t *testing.T) {
 	// given
 	k := []byte("key")
 	expected := []byte("value")
-	v := gache.NewSkipListDB(
-		&gache.TableOpts{
-			WithSkipList: func() *gskl.SkipList[[]byte, []byte] {
-				impl := gskl.New[[]byte, []byte](bytes.Compare, bytes.Equal)
-				impl.Set(k, expected)
-				return impl
-			},
-		},
-	)
-
+	v := gache.XNew[[]byte, []byte](bytes.Compare, bytes.Equal)
+	v.Set(k, expected)
 	// when
 	actual, ok := v.Get(k)
 
