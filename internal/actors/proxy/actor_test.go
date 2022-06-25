@@ -70,10 +70,13 @@ func Benchmark_NewQueryProxy(b *testing.B) {
 		cancel()
 	})
 	b.Run("execute", func(b *testing.B) {
+		b.ResetTimer()
 		b.ReportAllocs()
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
-				query, done := gactors.NewLoadFromFileQuery(ctx, []byte("default"), []byte("j.csv"))
+				query, done := gactors.NewLoadFromFileQuery(
+					ctx, []byte("default"), []byte("i.csv"),
+				)
 				qp.Execute(ctx, query)
 				result := <-done
 				if !result.Success {

@@ -2,22 +2,24 @@ package reader
 
 import (
 	"context"
-	"log"
-
 	gactors "github.com/blong14/gache/internal/actors"
 	gfile "github.com/blong14/gache/internal/io/file"
+	gpool "github.com/blong14/gache/internal/pool"
 )
 
 // Reader implements Actor interface
 type Reader struct {
 	table gactors.Actor
-	scnr  *gfile.Scanner
+	pool  *gpool.WorkPool
+	batch int
 }
 
 func New(table gactors.Actor) gactors.Actor {
+	pool := gpool.New(table)
+	pool.Start(context.Background())
 	return &Reader{
 		table: table,
-		scnr:  gfile.NewScanner(),
+		pool:  pool,
 	}
 }
 
@@ -28,18 +30,28 @@ func (f *Reader) Execute(ctx context.Context, query *gactors.Query) {
 		}
 		return
 	}
-	buffer, err := gfile.ReadCSV(string(query.Header.FileName))
-	if err != nil {
-		log.Fatal(err)
+	reader := gfile.ScanCSV(string(query.Header.FileName))
+	reader.Init()
+	for reader.Scan() {
+		q := gactors.NewQuery(ctx, nil)
+		q.Header = gactors.QueryHeader{
+			TableName: query.Header.TableName,
+			Inst:      gactors.BatchSetValue,
+		}
+		q.Values = reader.Rows()
+		f.pool.Send(ctx, q)
 	}
-	f.scnr.Init(buffer)
-	for f.scnr.Scan() {
-		go func(rows []gactors.KeyValue) {
-			q, done := gactors.NewBatchSetValueQuery(ctx, query.Header.TableName, f.scnr.Rows())
-			f.table.Execute(q.Context(), q)
-			close(done)
-		}(f.scnr.Rows())
+	f.pool.Wait(ctx)
+	reader.Close()
+	success := false
+	if err := reader.Err(); err == nil {
+		success = true
 	}
-	query.Done(gactors.QueryResponse{Success: true})
+	query.Done(
+		gactors.QueryResponse{
+			Success: success,
+			Value:   []byte("done"),
+		},
+	)
 	return
 }

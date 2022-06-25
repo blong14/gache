@@ -14,17 +14,17 @@ import (
 func TestNew(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
-	wal := gwal.New()
-	table := gview.New(
-		wal,
-		&gcache.TableOpts{
-			TableName: []byte("default"),
-		},
+	query, done := gactors.NewLoadFromFileQuery(ctx,
+		[]byte("default"), []byte("i.csv"))
+	t.Cleanup(func() {
+		close(done)
+		cancel()
+	})
+	table := gview.New(gwal.New(), &gcache.TableOpts{
+		TableName: []byte("default"),
+	},
 	)
-
 	actor := greader.New(table)
-
-	query, done := gactors.NewLoadFromFileQuery(ctx, []byte("default"), []byte("i.csv"))
 	actor.Execute(ctx, query)
 	select {
 	case <-ctx.Done():
@@ -34,7 +34,4 @@ func TestNew(t *testing.T) {
 			t.Error("data not loaded")
 		}
 	}
-	t.Cleanup(func() {
-		cancel()
-	})
 }

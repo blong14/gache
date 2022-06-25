@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	proxy2 "github.com/blong14/gache/internal/actors/proxy"
-	gwal "github.com/blong14/gache/internal/actors/wal"
 	"log"
 	"os"
 	"os/signal"
@@ -18,7 +16,9 @@ import (
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
 
+	gproxy "github.com/blong14/gache/internal/actors/proxy"
 	grepl "github.com/blong14/gache/internal/actors/replication"
+	gwal "github.com/blong14/gache/internal/actors/wal"
 	gerrors "github.com/blong14/gache/internal/errors"
 	gio "github.com/blong14/gache/internal/io"
 	ghttp "github.com/blong14/gache/internal/io/http"
@@ -71,18 +71,18 @@ func main() {
 	wal := gwal.New(
 		grepl.New(client),
 	)
-	qp, err := proxy2.NewQueryProxy(wal)
+	qp, err := gproxy.NewQueryProxy(wal)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	rpcSRV := ghttp.Server(":8080")
-	go grpc.Start(rpcSRV, proxy2.RpcHandlers(qp))
+	go grpc.Start(rpcSRV, gproxy.RpcHandlers(qp))
 
 	httpSRV := ghttp.Server(":8081")
 	go ghttp.Start(httpSRV, gio.HttpHandlers(qp))
 
-	proxy2.StartProxy(ctx, qp)
+	gproxy.StartProxy(ctx, qp)
 
 	s := <-sigint
 	log.Printf("received %s signal\n", s)

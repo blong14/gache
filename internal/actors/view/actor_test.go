@@ -3,11 +3,12 @@ package view_test
 import (
 	"bytes"
 	"context"
+	"testing"
+
 	gactors "github.com/blong14/gache/internal/actors"
 	gview "github.com/blong14/gache/internal/actors/view"
 	gwal "github.com/blong14/gache/internal/actors/wal"
 	gcache "github.com/blong14/gache/internal/cache"
-	"testing"
 )
 
 func assertMatch(t *testing.T, want []byte, got []byte) {
@@ -19,7 +20,8 @@ func assertMatch(t *testing.T, want []byte, got []byte) {
 func testGet_Hit(ctx context.Context, v gactors.Actor, expected *gactors.QueryResponse) func(t *testing.T) {
 	return func(t *testing.T) {
 		t.Parallel()
-		query, outbox := gactors.NewSetValueQuery(ctx, []byte("default"), expected.Key, expected.Value)
+		query, outbox := gactors.NewSetValueQuery(ctx,
+			[]byte("default"), expected.Key, expected.Value)
 		defer close(outbox)
 		v.Execute(query.Context(), query)
 		select {

@@ -4,7 +4,7 @@ init:
 
 bench: clean
 	# ~/sdk/go1.18/bin/go test sync -cpu=1 -bench=BenchmarkLoad -benchmem -run=XXX
-	~/sdk/go1.18/bin/go test -cpu=1,2,4,8 -bench=BenchmarkConcurrent -run=XXX ./...
+	~/sdk/go1.18/bin/go test -cpu=1,2,4,8 -bench=Benchmark -run=XXX ./...
 
 docs:
 	~/sdk/go1.18/bin/go doc -all

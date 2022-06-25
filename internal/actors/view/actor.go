@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
 	gactors "github.com/blong14/gache/internal/actors"
 	gwal "github.com/blong14/gache/internal/actors/wal"
 	gcache "github.com/blong14/gache/internal/cache"
+	genv "github.com/blong14/gache/internal/environment"
 )
 
 // Table implements Actor
@@ -31,6 +32,18 @@ func New(wal *gwal.Log, opts *gcache.TableOpts) gactors.Actor {
 }
 
 func (va *Table) Execute(ctx context.Context, query *gactors.Query) {
+	var span trace.Span
+	if genv.TraceEnabled() {
+		ctx, span = va.tracer.Start(
+			ctx, "table-proxy:Execute")
+		defer span.End()
+		span.SetAttributes(
+			attribute.String(
+				"query-instruction",
+				query.Header.Inst.String(),
+			),
+		)
+	}
 	switch query.Header.Inst {
 	case gactors.GetValue:
 		var resp gactors.QueryResponse
@@ -57,11 +70,15 @@ func (va *Table) Execute(ctx context.Context, query *gactors.Query) {
 		})
 		query.Done(gactors.QueryResponse{Success: true})
 	case gactors.SetValue:
-		// va.log.Execute(ctx, query)
+		go va.log.Execute(ctx, query)
 		va.impl.Set(query.Key, query.Value)
-		query.Done(gactors.QueryResponse{Success: true, Key: query.Key, Value: query.Value})
+		query.Done(gactors.QueryResponse{
+			Key:     query.Key,
+			Value:   query.Value,
+			Success: true,
+		})
 	case gactors.BatchSetValue:
-		// va.log.Execute(ctx, query)
+		go va.log.Execute(ctx, query)
 		for _, kv := range query.Values {
 			if kv.Valid() {
 				va.impl.Set(kv.Key, kv.Value)

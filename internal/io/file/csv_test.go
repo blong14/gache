@@ -1,6 +1,7 @@
 package file_test
 
 import (
+	"github.com/blong14/gache/internal/actors"
 	"testing"
 
 	gfile "github.com/blong14/gache/internal/io/file"
@@ -19,13 +20,26 @@ func TestReadCSV(t *testing.T) {
 
 func BenchmarkReadCSV(b *testing.B) {
 	b.ReportAllocs()
-	var l float64
+	out := make([]actors.KeyValue, 0)
 	for i := 0; i < b.N; i++ {
 		data, err := gfile.ReadCSV("i.csv")
 		if err != nil {
 			b.Error(err)
 		}
-		l = float64(len(data))
+		out = append(out, data...)
 	}
-	b.ReportMetric(l, "items")
+	b.ReportMetric(float64(len(out)), "items")
+}
+
+func BenchmarkScanCSV(b *testing.B) {
+	b.ReportAllocs()
+	out := make([]actors.KeyValue, 0)
+	for i := 0; i < b.N; i++ {
+		reader := gfile.ScanCSV("i.csv")
+		reader.Init()
+		for reader.Scan() {
+			out = append(out, reader.Rows()...)
+		}
+	}
+	b.ReportMetric(float64(len(out)), "items")
 }

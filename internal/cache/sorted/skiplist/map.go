@@ -2,6 +2,7 @@ package skiplist
 
 import (
 	"fmt"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -35,6 +36,7 @@ var pool = sync.Pool{
 }
 
 func init() {
+	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < 100_000; i++ {
 		preds := pool.Get().([]*mapEntry)
 		pool.Put(preds)
@@ -138,12 +140,8 @@ func (sl *SkipList[K, V]) Count() uint64 {
 }
 
 func (sl *SkipList[K, V]) randomHeight() uint64 {
-	// https://www.jstatsoft.org/article/download/v008i14/916
-	idx := time.Now().UnixNano()
-	x := idx << 13 // magic prime numbers
-	x = x >> 7
-	x = x << 17
-	return uint64(x) % uint64(sl.MaxHeight)
+	height := rand.Int63n(int64(sl.MaxHeight))
+	return uint64(height)
 }
 
 func unlock(highestLocked int, preds []*mapEntry) {
@@ -169,8 +167,8 @@ func (sl *SkipList[K, V]) Set(key K, value V) {
 	succs := pool.Get().([]*mapEntry)
 	defer pool.Put(succs)
 	var (
+		valid         bool
 		topLayer      = sl.randomHeight()
-		valid         = true
 		pred          *mapEntry
 		succ          *mapEntry
 		prevPred      *mapEntry
@@ -190,7 +188,6 @@ func (sl *SkipList[K, V]) Set(key K, value V) {
 			}
 			continue
 		}
-
 		height := atomic.LoadUint64(&sl.H)
 		for layer := uint64(0); valid && (layer <= height); layer++ {
 			pred = preds[layer]

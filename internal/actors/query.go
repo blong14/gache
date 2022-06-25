@@ -162,6 +162,7 @@ func NewBatchSetValueQuery(ctx context.Context, db []byte, values []KeyValue) (*
 		Inst:      BatchSetValue,
 	}
 	query.Values = values
+
 	return query, done
 }
 

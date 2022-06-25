@@ -54,7 +54,7 @@ func tracerProvider(url string) (*tracesdk.TracerProvider, error) {
 }
 
 func main() {
-	if err := os.Setenv("DEBUG", "false"); err != nil {
+	if err := os.Setenv("DEBUG", "true"); err != nil {
 		log.Fatal(err)
 	}
 	if err := os.Setenv("TRACE", "false"); err != nil {
@@ -129,9 +129,11 @@ func Accept(ctx context.Context, qp *gproxy.QueryProxy) {
 			start := time.Now()
 			qp.Execute(ctx, query)
 			for result := range finished {
-				fmt.Println("% --\tkey\tvalue")
+				fmt.Println("% --\tstatus\tkey\tvalue")
 				if result.Success {
-					fmt.Printf("[%s] 1.\t%s\t%s", time.Since(start), string(result.Key), result.Value)
+					fmt.Printf(
+						"[%s] 1.\t%v\t%s\t%s\n",
+						time.Since(start), result.Success, string(result.Key), result.Value)
 				}
 				break
 			}

@@ -1,14 +1,16 @@
 package file
 
 import (
+	"fmt"
+	"runtime"
+
 	"github.com/blong14/gache/internal/actors"
 	gerrors "github.com/blong14/gache/internal/errors"
 )
 
-const maxCount = 6000
-
 type Scanner struct {
 	start int
+	max   int
 	buf   []actors.KeyValue
 	token []actors.KeyValue
 	errs  *gerrors.Error
@@ -16,12 +18,15 @@ type Scanner struct {
 
 func NewScanner() *Scanner {
 	return &Scanner{
-		token: make([]actors.KeyValue, maxCount),
+		max: 0,
 	}
 }
 
 func (s *Scanner) Init(kvs []actors.KeyValue) {
+	s.start = 0
 	s.buf = kvs
+	s.max = len(kvs) / runtime.NumCPU()
+	s.token = make([]actors.KeyValue, s.max)
 }
 
 func (s *Scanner) Rows() []actors.KeyValue {
@@ -37,7 +42,7 @@ func (s *Scanner) Scan() bool {
 	for i, kv := range s.buf[s.start:len(s.buf)] {
 		idx = s.start + i + 1
 		out = append(out, kv)
-		if len(out) == maxCount {
+		if len(out) == s.max {
 			s.start = idx
 			copy(s.token, out)
 			return true
@@ -49,4 +54,8 @@ func (s *Scanner) Scan() bool {
 		return true
 	}
 	return false
+}
+
+func (s *Scanner) String() string {
+	return fmt.Sprintf("actors.KeyValue %d", len(s.buf))
 }

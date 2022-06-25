@@ -3,11 +3,12 @@ package proxy
 import (
 	"bytes"
 	"context"
-	"log"
-	"sync"
-
+	genv "github.com/blong14/gache/internal/environment"
+	glog "github.com/blong14/gache/internal/logging"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+	"log"
 
 	gactor "github.com/blong14/gache/internal/actors"
 	gfile "github.com/blong14/gache/internal/actors/file/reader"
@@ -22,6 +23,7 @@ type QueryProxy struct {
 	tracer trace.Tracer
 	// table name to table actor
 	tables gcache.Table[[]byte, gactor.Actor]
+	batch  int
 }
 
 var _ gactor.Actor = &QueryProxy{}
@@ -31,11 +33,24 @@ func NewQueryProxy(wal *gwal.Log) (*QueryProxy, error) {
 	return &QueryProxy{
 		log:    wal,
 		tracer: otel.Tracer("query-proxy"),
-		tables: gcache.XNew[[]byte, gactor.Actor](bytes.Compare, bytes.Equal),
+		tables: gcache.XNew[[]byte, gactor.Actor](
+			bytes.Compare, bytes.Equal),
 	}, nil
 }
 
 func (qp *QueryProxy) Execute(ctx context.Context, query *gactor.Query) {
+	var span trace.Span
+	if genv.TraceEnabled() {
+		ctx, span = qp.tracer.Start(
+			ctx, "query-proxy:Execute")
+		defer span.End()
+		span.SetAttributes(
+			attribute.String(
+				"query-instruction",
+				query.Header.Inst.String(),
+			),
+		)
+	}
 	switch query.Header.Inst {
 	case gactor.AddTable:
 		var opts *gcache.TableOpts
@@ -50,13 +65,16 @@ func (qp *QueryProxy) Execute(ctx context.Context, query *gactor.Query) {
 		qp.tables.Set(query.Header.TableName, t)
 		qp.log.Execute(ctx, query)
 		query.Done(gactor.QueryResponse{Success: true})
-	case gactor.GetValue, gactor.Print, gactor.Range, gactor.BatchSetValue, gactor.SetValue:
+	case gactor.GetValue, gactor.Print, gactor.Range,
+		gactor.BatchSetValue, gactor.SetValue:
 		table, ok := qp.tables.Get(query.Header.TableName)
 		if !ok {
 			return
 		}
 		table.Execute(ctx, query)
 	case gactor.Load:
+		glog.Track(
+			"loading csv %s for %s", query.Header.FileName, query.Header.TableName)
 		table, ok := qp.tables.Get(query.Header.TableName)
 		if !ok {
 			return
@@ -67,15 +85,15 @@ func (qp *QueryProxy) Execute(ctx context.Context, query *gactor.Query) {
 	}
 }
 
-var onc sync.Once
-
 func StartProxy(ctx context.Context, qp *QueryProxy) {
-	onc.Do(func() {
-		log.Println("starting query proxy")
-		query, done := gactor.NewAddTableQuery(ctx, []byte("default"))
+	log.Println("starting query proxy")
+	for _, table := range []string{"default", "a", "b", "c"} {
+		query, done := gactor.NewAddTableQuery(
+			ctx, []byte(table),
+		)
 		qp.Execute(ctx, query)
 		<-done
-		log.Println("default table added")
 		close(done)
-	})
+	}
+	log.Println("default tables added")
 }
