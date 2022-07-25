@@ -19,7 +19,7 @@ var _ gactors.Actor = &Log{}
 
 func New(subs ...gactors.Actor) *Log {
 	return &Log{
-		impl:          gcache.XNew[[]byte, []byte](bytes.Compare, bytes.Equal),
+		impl:          gcache.New[[]byte, []byte](bytes.Compare, bytes.Equal),
 		subscriptions: subs,
 	}
 }

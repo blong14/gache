@@ -3,24 +3,27 @@ package proxy
 import (
 	"bytes"
 	"context"
-	genv "github.com/blong14/gache/internal/environment"
-	glog "github.com/blong14/gache/internal/logging"
+	"log"
+
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"log"
 
 	gactor "github.com/blong14/gache/internal/actors"
 	gfile "github.com/blong14/gache/internal/actors/file/reader"
 	gview "github.com/blong14/gache/internal/actors/view"
 	gwal "github.com/blong14/gache/internal/actors/wal"
 	gcache "github.com/blong14/gache/internal/cache"
+	genv "github.com/blong14/gache/internal/environment"
+	glog "github.com/blong14/gache/internal/logging"
+	gpool "github.com/blong14/gache/internal/pool"
 )
 
 // QueryProxy implements gactors.Actor interface
 type QueryProxy struct {
 	log    *gwal.Log
 	tracer trace.Tracer
+	pool   *gpool.WorkPool
 	// table name to table actor
 	tables gcache.Table[[]byte, gactor.Actor]
 	batch  int
@@ -33,9 +36,18 @@ func NewQueryProxy(wal *gwal.Log) (*QueryProxy, error) {
 	return &QueryProxy{
 		log:    wal,
 		tracer: otel.Tracer("query-proxy"),
-		tables: gcache.XNew[[]byte, gactor.Actor](
+		tables: gcache.New[[]byte, gactor.Actor](
 			bytes.Compare, bytes.Equal),
 	}, nil
+}
+
+func (qp *QueryProxy) SetPool(pool *gpool.WorkPool) *QueryProxy {
+	qp.pool = pool
+	return qp
+}
+
+func (qp *QueryProxy) Enqueue(ctx context.Context, query *gactor.Query) {
+	qp.pool.Send(ctx, query)
 }
 
 func (qp *QueryProxy) Execute(ctx context.Context, query *gactor.Query) {
@@ -75,11 +87,7 @@ func (qp *QueryProxy) Execute(ctx context.Context, query *gactor.Query) {
 	case gactor.Load:
 		glog.Track(
 			"loading csv %s for %s", query.Header.FileName, query.Header.TableName)
-		table, ok := qp.tables.Get(query.Header.TableName)
-		if !ok {
-			return
-		}
-		loader := gfile.New(table)
+		loader := gfile.New(qp.pool)
 		loader.Execute(ctx, query)
 	default:
 	}
@@ -87,13 +95,21 @@ func (qp *QueryProxy) Execute(ctx context.Context, query *gactor.Query) {
 
 func StartProxy(ctx context.Context, qp *QueryProxy) {
 	log.Println("starting query proxy")
+	pool := gpool.New(qp)
+	pool.Start(ctx)
+	qp.SetPool(pool)
 	for _, table := range []string{"default", "a", "b", "c"} {
 		query, done := gactor.NewAddTableQuery(
 			ctx, []byte(table),
 		)
-		qp.Execute(ctx, query)
+		qp.Enqueue(ctx, query)
 		<-done
 		close(done)
 	}
 	log.Println("default tables added")
+}
+
+func StopProxy(ctx context.Context, qp *QueryProxy) {
+	log.Println("stopping query proxy")
+	qp.pool.WaitAndStop(ctx)
 }

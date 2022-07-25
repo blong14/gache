@@ -52,6 +52,7 @@ func TestViewActor_Get(t *testing.T) {
 	t.Parallel()
 	// given
 	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 	opts := &gcache.TableOpts{
 		TableName: []byte("default"),
 	}
@@ -62,7 +63,4 @@ func TestViewActor_Get(t *testing.T) {
 		Value: []byte("value"),
 	}
 	t.Run("hit", testGet_Hit(ctx, v, hit))
-	t.Cleanup(func() {
-		cancel()
-	})
 }

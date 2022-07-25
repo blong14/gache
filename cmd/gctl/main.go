@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
-	gproxy "github.com/blong14/gache/internal/actors/proxy"
-	gwal "github.com/blong14/gache/internal/actors/wal"
 	"log"
 	"os"
 	"os/signal"
@@ -16,13 +14,17 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/jaeger"
 	"go.opentelemetry.io/otel/sdk/resource"
+
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
 
 	gactors "github.com/blong14/gache/internal/actors"
+	gproxy "github.com/blong14/gache/internal/actors/proxy"
 	grepl "github.com/blong14/gache/internal/actors/replication"
+	gwal "github.com/blong14/gache/internal/actors/wal"
 	gerrors "github.com/blong14/gache/internal/errors"
 	grpc "github.com/blong14/gache/internal/io/rpc"
+	glog "github.com/blong14/gache/internal/logging"
 )
 
 var done chan struct{}
@@ -54,12 +56,6 @@ func tracerProvider(url string) (*tracesdk.TracerProvider, error) {
 }
 
 func main() {
-	if err := os.Setenv("DEBUG", "true"); err != nil {
-		log.Fatal(err)
-	}
-	if err := os.Setenv("TRACE", "false"); err != nil {
-		log.Fatal(err)
-	}
 	sigint := make(chan os.Signal, 1)
 	signal.Notify(sigint, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
@@ -76,10 +72,7 @@ func main() {
 		log.Println(err)
 	}
 
-	wal := gwal.New(
-		grepl.New(client),
-	)
-	qp, err := gproxy.NewQueryProxy(wal)
+	qp, err := gproxy.NewQueryProxy(gwal.New(grepl.New(client)))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -97,7 +90,8 @@ func main() {
 		}
 	case <-done:
 	}
-	log.Printf("received %s signal\n", s)
+	glog.Track("received %s signal\n", s)
+	gproxy.StopProxy(ctx, qp)
 	errs := gerrors.Append(tp.ForceFlush(ctx), tp.Shutdown(ctx))
 	if errs.ErrorOrNil() != nil {
 		log.Println(errs)
@@ -127,12 +121,13 @@ func Accept(ctx context.Context, qp *gproxy.QueryProxy) {
 				continue
 			}
 			start := time.Now()
-			qp.Execute(ctx, query)
+			qp.Enqueue(ctx, query)
+			// qp.Execute(ctx, query)
 			for result := range finished {
-				fmt.Println("% --\tstatus\tkey\tvalue")
+				fmt.Println("% --\t\tkey\tvalue")
 				if result.Success {
 					fmt.Printf(
-						"[%s] 1.\t%v\t%s\t%s\n",
+						"[%s]\n 1.\t%v\t%s\t%s\n",
 						time.Since(start), result.Success, string(result.Key), result.Value)
 				}
 				break

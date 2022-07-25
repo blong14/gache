@@ -3,10 +3,17 @@ package pool
 import (
 	"context"
 	"fmt"
+	"log"
 	"runtime"
 	"sync"
+	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	gactors "github.com/blong14/gache/internal/actors"
+	genv "github.com/blong14/gache/internal/environment"
 	glog "github.com/blong14/gache/internal/logging"
 )
 
@@ -22,24 +29,43 @@ type Worker struct {
 	inbox   chan *gactors.Query
 	stop    chan interface{}
 	proxy   gactors.Actor
+	tracer  trace.Tracer
 }
 
 func (s *Worker) Start(ctx context.Context) {
-	glog.Track("%s starting", s.id)
+	glog.Track("%T::%s starting", s.proxy, s.id)
 	for {
 		select {
 		case <-ctx.Done():
-			glog.Track("%s ctx canceled", s.id)
+			glog.Track("%T::%s ctx canceled", s.proxy, s.id)
 			return
 		case <-s.stop:
-			glog.Track("%s stopping", s.id)
+			glog.Track("%T::%s stopping", s.proxy, s.id)
 			return
-		case query := <-s.inbox:
+		case query, ok := <-s.inbox:
+			if !ok {
+				return
+			}
+			var span trace.Span
+			if genv.TraceEnabled() {
+				ctx, span = s.tracer.Start(
+					query.Context(), fmt.Sprintf("%T::%s Execute", s.proxy, s.id))
+				span.SetAttributes(
+					attribute.String(
+						"query-instruction",
+						query.Header.Inst.String(),
+					),
+				)
+			}
+			start := time.Now()
+			s.proxy.Execute(ctx, query)
 			glog.Track(
-				"%s executing %s values=%d",
-				s.id, query.Header.Inst, len(query.Values),
+				"%T::%s executed %s values=%d in %s",
+				s.proxy, s.id, query.Header.Inst, len(query.Values), time.Since(start),
 			)
-			s.proxy.Execute(query.Context(), query)
+			if span != nil {
+				span.End()
+			}
 		}
 	}
 }
@@ -63,6 +89,7 @@ func (s *Worker) Stop(ctx context.Context) {
 }
 
 type WorkPool struct {
+	inbox   chan *gactors.Query
 	proxy   gactors.Actor
 	healthz chan struct{}
 	workers []Worker
@@ -70,24 +97,23 @@ type WorkPool struct {
 
 func New(proxy gactors.Actor) *WorkPool {
 	return &WorkPool{
+		inbox:   make(chan *gactors.Query),
 		proxy:   proxy,
 		healthz: make(chan struct{}, 1),
 		workers: make([]Worker, 0),
 	}
 }
 
-var (
-	inbox = make(chan *gactors.Query, 1)
-)
-
 func (s *WorkPool) Start(ctx context.Context) {
+	tracer := otel.Tracer("worker-pool")
 	for i := 0; i < runtime.NumCPU(); i++ {
 		worker := Worker{
 			id:      fmt.Sprintf("worker::%d", i),
 			proxy:   s.proxy,
-			inbox:   inbox,
+			inbox:   s.inbox,
 			stop:    make(chan interface{}, 0),
 			healthz: s.healthz,
+			tracer:  tracer,
 		}
 		s.workers = append(s.workers, worker)
 		go worker.Start(ctx)
@@ -97,12 +123,12 @@ func (s *WorkPool) Start(ctx context.Context) {
 func (s *WorkPool) Send(ctx context.Context, query *gactors.Query) {
 	select {
 	case <-ctx.Done():
-	case inbox <- query:
-	default:
+	case s.inbox <- query:
 	}
 }
 
-func (s *WorkPool) Wait(ctx context.Context) {
+func (s *WorkPool) WaitAndStop(ctx context.Context) {
+	log.Printf("%T stopping...\n", s.proxy)
 	var wg sync.WaitGroup
 	for _, worker := range s.workers {
 		wg.Add(1)
@@ -113,4 +139,6 @@ func (s *WorkPool) Wait(ctx context.Context) {
 		}(worker)
 	}
 	wg.Wait()
+	close(s.inbox)
+	log.Printf("%T stopped\n", s.proxy)
 }

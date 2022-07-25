@@ -87,8 +87,8 @@ func testRange(t *testing.T) {
 
 	// when
 	var keys []string
-	tree.Range(func(k, _ any) bool {
-		keys = append(keys, k.(string))
+	tree.Range(func(k, _ string) bool {
+		keys = append(keys, k)
 		return true
 	})
 
@@ -150,7 +150,7 @@ func BenchmarkConcurrent_LoadMostlyHits(b *testing.B) {
 			}
 			// Prime the map to get it into a steady state.
 			for i := 0; i < hits*2; i++ {
-				m.Range(func(_, _ any) bool { return true })
+				m.Range(func(_, _ string) bool { return true })
 			}
 		},
 		perG: func(b *testing.B, pb *testing.PB, i int, m *gtable.TableMap[string, string]) {
@@ -177,7 +177,7 @@ func BenchmarkConcurrent_LoadOrStoreBalanced(b *testing.B) {
 			}
 			// Prime the map to get it into a steady state.
 			for i := 0; i < hits*2; i++ {
-				m.Range(func(_, _ any) bool { return true })
+				m.Range(func(_, _ string) bool { return true })
 			}
 		},
 		perG: func(b *testing.B, pb *testing.PB, i int, m *gtable.TableMap[string, string]) {
@@ -227,7 +227,7 @@ func BenchmarkConcurrent_Range(b *testing.B) {
 		perG: func(b *testing.B, pb *testing.PB, i int, m *gtable.TableMap[string, string]) {
 			for ; pb.Next(); i++ {
 				mtx.RLock()
-				m.Range(func(_, _ any) bool { return true })
+				m.Range(func(_, _ string) bool { return true })
 				mtx.RUnlock()
 			}
 		},

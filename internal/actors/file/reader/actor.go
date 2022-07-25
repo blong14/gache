@@ -2,29 +2,53 @@ package reader
 
 import (
 	"context"
+	"sync"
+
 	gactors "github.com/blong14/gache/internal/actors"
 	gfile "github.com/blong14/gache/internal/io/file"
 	gpool "github.com/blong14/gache/internal/pool"
 )
 
-// Reader implements Actor interface
-type Reader struct {
-	table gactors.Actor
-	pool  *gpool.WorkPool
-	batch int
+type waiter struct {
+	sync.WaitGroup
+	chns []chan gactors.QueryResponse
 }
 
-func New(table gactors.Actor) gactors.Actor {
-	pool := gpool.New(table)
-	pool.Start(context.Background())
+func (w *waiter) Add(ch chan gactors.QueryResponse) {
+	w.chns = append(w.chns, ch)
+	w.WaitGroup.Add(1)
+}
+
+func (w *waiter) Wait(ctx context.Context) {
+	for _, ch := range w.chns {
+		go func(done chan gactors.QueryResponse) {
+			defer w.WaitGroup.Done()
+			select {
+			case <-ctx.Done():
+			case <-done:
+			}
+		}(ch)
+	}
+	w.WaitGroup.Wait()
+}
+
+// Reader implements Actor interface
+type Reader struct {
+	table  gactors.Actor
+	pool   *gpool.WorkPool
+	waiter *waiter
+	batch  int
+}
+
+func New(pool *gpool.WorkPool) gactors.Actor {
 	return &Reader{
-		table: table,
-		pool:  pool,
+		pool:   pool,
+		waiter: &waiter{chns: make([]chan gactors.QueryResponse, 0)},
 	}
 }
 
 func (f *Reader) Execute(ctx context.Context, query *gactors.Query) {
-	if f.table == nil || query.Header.Inst != gactors.Load {
+	if query.Header.Inst != gactors.Load {
 		if query != nil {
 			query.Done(gactors.QueryResponse{Success: false})
 		}
@@ -33,16 +57,12 @@ func (f *Reader) Execute(ctx context.Context, query *gactors.Query) {
 	reader := gfile.ScanCSV(string(query.Header.FileName))
 	reader.Init()
 	for reader.Scan() {
-		q := gactors.NewQuery(ctx, nil)
-		q.Header = gactors.QueryHeader{
-			TableName: query.Header.TableName,
-			Inst:      gactors.BatchSetValue,
-		}
-		q.Values = reader.Rows()
+		q, done := gactors.NewBatchSetValueQuery(ctx, query.Header.TableName, reader.Rows())
+		f.waiter.Add(done)
 		f.pool.Send(ctx, q)
 	}
-	f.pool.Wait(ctx)
 	reader.Close()
+	f.waiter.Wait(ctx)
 	success := false
 	if err := reader.Err(); err == nil {
 		success = true

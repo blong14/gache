@@ -55,7 +55,7 @@ func (qs *QueryService) OnQuery(req *QueryRequest, resp *QueryResponse) error {
 	qry.Value = query.Value
 	qry.Values = query.Values
 
-	qs.Proxy.Execute(ctx, qry)
+	qs.Proxy.Enqueue(ctx, qry)
 	select {
 	case <-ctx.Done():
 	case result, ok := <-done:

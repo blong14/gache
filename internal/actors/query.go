@@ -83,8 +83,8 @@ func (m *Query) String() string {
 
 func (m *Query) Done(r QueryResponse) {
 	select {
+	case <-m.ctx.Done():
 	case m.done <- r:
-	default:
 	}
 }
 

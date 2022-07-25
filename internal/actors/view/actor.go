@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -27,7 +28,7 @@ func New(wal *gwal.Log, opts *gcache.TableOpts) gactors.Actor {
 		name:   opts.TableName,
 		tracer: otel.Tracer("table-proxy"),
 		log:    wal,
-		impl:   gcache.XNew[[]byte, []byte](bytes.Compare, bytes.Equal),
+		impl:   gcache.New[[]byte, []byte](bytes.Compare, bytes.Equal),
 	}
 }
 
@@ -65,7 +66,7 @@ func (va *Table) Execute(ctx context.Context, query *gactors.Query) {
 				return false
 			default:
 			}
-			fmt.Printf("%s ", k)
+			fmt.Printf("%s\n", k)
 			return true
 		})
 		query.Done(gactors.QueryResponse{Success: true})

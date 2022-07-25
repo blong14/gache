@@ -53,6 +53,11 @@ func NewWithOptions[K, V any](comp func(a, b K) int, options ...TableOption[K, V
 	return t
 }
 
+func (c *TableMap[K, V]) Init(comp func(a, b K) int) {
+	c.impl = make([]*mapEntry, 0, 1024)
+	c.comparator = comp
+}
+
 func (c *TableMap[K, V]) findIndex(key K, low, high int) int {
 	if high < low {
 		return high + 1
@@ -105,9 +110,9 @@ func (c *TableMap[K, V]) Print() { log.Printf("%d %v", len(c.impl), c.impl) }
 // to each item. fnc returns a bool
 // true represents continuation of the range operation
 // false indicates ranging should stop
-func (c *TableMap[K, V]) Range(fnc func(k any, v any) bool) {
+func (c *TableMap[K, V]) Range(fnc func(k K, v V) bool) {
 	for _, i := range c.impl {
-		result := fnc(i.Key, i.Value)
+		result := fnc(i.Key.(K), i.Value.(V))
 		if result {
 			continue
 		}

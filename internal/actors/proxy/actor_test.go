@@ -19,16 +19,18 @@ func TestQueryProxy_Execute(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-
-	query, done := gactors.NewLoadFromFileQuery(ctx, []byte("default"), []byte("j.csv"))
 	gproxy.StartProxy(ctx, qp)
 	t.Cleanup(func() {
-		close(done)
+		gproxy.StopProxy(ctx, qp)
 		cancel()
 	})
 
-	qp.Execute(ctx, query)
+	query, done := gactors.NewLoadFromFileQuery(ctx, []byte("default"), []byte("j.csv"))
+	t.Cleanup(func() {
+		close(done)
+	})
 
+	qp.Enqueue(ctx, query)
 	select {
 	case <-ctx.Done():
 		t.Error(ctx.Err())
@@ -40,12 +42,11 @@ func TestQueryProxy_Execute(t *testing.T) {
 	}
 
 	query, finished := gactors.NewPrintQuery(ctx, []byte("default"))
-	qp.Execute(ctx, query)
-
 	t.Cleanup(func() {
 		close(finished)
 	})
 
+	qp.Enqueue(ctx, query)
 	select {
 	case <-ctx.Done():
 		t.Error(ctx.Err())
@@ -60,32 +61,35 @@ func TestQueryProxy_Execute(t *testing.T) {
 func Benchmark_NewQueryProxy(b *testing.B) {
 	b.Setenv("DEBUG", "false")
 	b.Setenv("TRACE", "false")
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	qp, err := gproxy.NewQueryProxy(gwal.New())
 	if err != nil {
 		b.Error(err)
 	}
-	go gproxy.StartProxy(ctx, qp)
+	gproxy.StartProxy(ctx, qp)
 	b.Cleanup(func() {
+		gproxy.StopProxy(ctx, qp)
 		cancel()
 	})
-	b.Run("execute", func(b *testing.B) {
-		b.ResetTimer()
-		b.ReportAllocs()
-		b.RunParallel(func(pb *testing.PB) {
-			for pb.Next() {
-				query, done := gactors.NewLoadFromFileQuery(
-					ctx, []byte("default"), []byte("i.csv"),
-				)
-				qp.Execute(ctx, query)
-				result := <-done
-				if !result.Success {
-					b.Error("not ok")
-				}
-				close(done)
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		query, done := gactors.NewLoadFromFileQuery(
+			ctx, []byte("default"), []byte("i.csv"),
+		)
+		qp.Enqueue(ctx, query)
+		select {
+		case <-ctx.Done():
+			close(done)
+			b.Error(ctx.Err())
+			return
+		case result, ok := <-done:
+			if !ok || !result.Success {
+				b.Error("not ok")
 			}
-		})
-	})
+		}
+		close(done)
+	}
 }
 
 func BenchmarkConcurrent_QueryProxy(b *testing.B) {
@@ -96,18 +100,17 @@ func BenchmarkConcurrent_QueryProxy(b *testing.B) {
 	if err != nil {
 		b.Error(err)
 	}
-	go gproxy.StartProxy(ctx, qp)
+	gproxy.StartProxy(ctx, qp)
 	b.Cleanup(func() {
+		gproxy.StopProxy(ctx, qp)
 		cancel()
 	})
-
 	for _, i := range []int{3, 5, 7} {
 		readFrac := float32(i) / 10.0
 		b.Run(fmt.Sprintf("skiplist_%v", readFrac), func(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
-			var hits int
-			var misses int
+			var hits, misses int
 			b.RunParallel(func(pb *testing.PB) {
 				rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 				for pb.Next() {
@@ -119,7 +122,7 @@ func BenchmarkConcurrent_QueryProxy(b *testing.B) {
 					} else {
 						query, done = gactors.NewSetValueQuery(ctx, []byte("default"), []byte(key), []byte(""))
 					}
-					qp.Execute(ctx, query)
+					qp.Enqueue(ctx, query)
 					result, ok := <-done
 					if ok && result.Success {
 						hits++

@@ -3,6 +3,7 @@ package file
 import (
 	"encoding/csv"
 	"io"
+	"math"
 	"os"
 	"runtime"
 
@@ -74,10 +75,15 @@ func (s *Reader) Scan() bool {
 	return false
 }
 
+var (
+	base     = float64(2)
+	exponent = float64(14)
+)
+
 func ScanCSV(data string) *Reader {
 	return &Reader{
 		data: data,
-		max:  18000 / runtime.NumCPU(),
+		max:  int(math.Pow(base, exponent)) / (runtime.NumCPU() / int(base)),
 	}
 }
 
