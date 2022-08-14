@@ -26,10 +26,6 @@ func TestQueryProxy_Execute(t *testing.T) {
 	})
 
 	query, done := gactors.NewLoadFromFileQuery(ctx, []byte("default"), []byte("j.csv"))
-	t.Cleanup(func() {
-		close(done)
-	})
-
 	qp.Enqueue(ctx, query)
 	select {
 	case <-ctx.Done():
@@ -42,10 +38,6 @@ func TestQueryProxy_Execute(t *testing.T) {
 	}
 
 	query, finished := gactors.NewPrintQuery(ctx, []byte("default"))
-	t.Cleanup(func() {
-		close(finished)
-	})
-
 	qp.Enqueue(ctx, query)
 	select {
 	case <-ctx.Done():
@@ -80,7 +72,6 @@ func Benchmark_NewQueryProxy(b *testing.B) {
 		qp.Enqueue(ctx, query)
 		select {
 		case <-ctx.Done():
-			close(done)
 			b.Error(ctx.Err())
 			return
 		case result, ok := <-done:
@@ -88,7 +79,6 @@ func Benchmark_NewQueryProxy(b *testing.B) {
 				b.Error("not ok")
 			}
 		}
-		close(done)
 	}
 }
 
@@ -129,7 +119,6 @@ func BenchmarkConcurrent_QueryProxy(b *testing.B) {
 					} else {
 						misses++
 					}
-					close(done)
 				}
 			})
 			b.ReportMetric(float64(hits), "hits")

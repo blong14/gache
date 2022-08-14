@@ -122,7 +122,6 @@ func Accept(ctx context.Context, qp *gproxy.QueryProxy) {
 			}
 			start := time.Now()
 			qp.Enqueue(ctx, query)
-			// qp.Execute(ctx, query)
 			for result := range finished {
 				fmt.Println("% --\t\tkey\tvalue")
 				if result.Success {
@@ -132,7 +131,6 @@ func Accept(ctx context.Context, qp *gproxy.QueryProxy) {
 				}
 				break
 			}
-			close(finished)
 		}
 	}
 }

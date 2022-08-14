@@ -82,10 +82,15 @@ func (m *Query) String() string {
 }
 
 func (m *Query) Done(r QueryResponse) {
+	if m.done == nil {
+		return
+	}
 	select {
 	case <-m.ctx.Done():
 	case m.done <- r:
 	}
+	close(m.done)
+	m.done = nil
 }
 
 func (m *Query) Context() context.Context {

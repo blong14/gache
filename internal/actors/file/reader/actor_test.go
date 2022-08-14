@@ -21,9 +21,9 @@ func TestNew(t *testing.T) {
 	pool := gpool.New(table)
 	pool.Start(ctx)
 	t.Cleanup(func() { pool.WaitAndStop(ctx) })
+
 	start := time.Now()
 	query, done := gactors.NewLoadFromFileQuery(ctx, []byte("default"), []byte("i.csv"))
-	t.Cleanup(func() { close(done) })
 	actor := greader.New(pool)
 	actor.Execute(ctx, query)
 	select {

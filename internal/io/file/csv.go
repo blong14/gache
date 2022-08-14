@@ -69,7 +69,7 @@ func (s *Reader) Scan() bool {
 		}
 	}
 	if len(out) > 0 {
-		copy(s.token, out)
+		s.token = out
 		return true
 	}
 	return false

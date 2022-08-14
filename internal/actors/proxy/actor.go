@@ -6,15 +6,14 @@ import (
 	"log"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
+	gtrace "github.com/blong14/gache/internal"
 	gactor "github.com/blong14/gache/internal/actors"
 	gfile "github.com/blong14/gache/internal/actors/file/reader"
 	gview "github.com/blong14/gache/internal/actors/view"
 	gwal "github.com/blong14/gache/internal/actors/wal"
 	gcache "github.com/blong14/gache/internal/cache"
-	genv "github.com/blong14/gache/internal/environment"
 	glog "github.com/blong14/gache/internal/logging"
 	gpool "github.com/blong14/gache/internal/pool"
 )
@@ -51,18 +50,8 @@ func (qp *QueryProxy) Enqueue(ctx context.Context, query *gactor.Query) {
 }
 
 func (qp *QueryProxy) Execute(ctx context.Context, query *gactor.Query) {
-	var span trace.Span
-	if genv.TraceEnabled() {
-		ctx, span = qp.tracer.Start(
-			ctx, "query-proxy:Execute")
-		defer span.End()
-		span.SetAttributes(
-			attribute.String(
-				"query-instruction",
-				query.Header.Inst.String(),
-			),
-		)
-	}
+	ctx, span := gtrace.Trace(ctx, qp.tracer, query, "query-proxy")
+	defer span.End()
 	switch query.Header.Inst {
 	case gactor.AddTable:
 		var opts *gcache.TableOpts
@@ -104,7 +93,6 @@ func StartProxy(ctx context.Context, qp *QueryProxy) {
 		)
 		qp.Enqueue(ctx, query)
 		<-done
-		close(done)
 	}
 	log.Println("default tables added")
 }

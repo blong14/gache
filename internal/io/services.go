@@ -30,7 +30,7 @@ func GetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 			ghttp.MustWriteJSON(w, r, http.StatusBadRequest, resp)
 			return
 		}
-		database := urlQuery.Get("database")
+		database := urlQuery.Get("table")
 		if database == "" {
 			database = "default"
 		}
@@ -40,19 +40,17 @@ func GetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
+
 		query, outbox := gactors.NewGetValueQuery(ctx, db, key)
-		defer close(outbox)
-		go qp.Execute(ctx, query)
+		qp.Enqueue(ctx, query)
 
 		var status int
 		select {
-		case <-r.Context().Done():
-			glog.Track("%s", r.Context().Err())
+		case <-ctx.Done():
 			status = http.StatusInternalServerError
 		case result, ok := <-outbox:
 			switch {
 			case !ok:
-				glog.Track("%s", r.Context().Err())
 				status = http.StatusInternalServerError
 			case result.Success:
 				resp["status"] = "ok"
@@ -60,7 +58,6 @@ func GetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 				resp["value"] = string(result.Value)
 				status = http.StatusOK
 			default:
-				resp["error"] = "not found"
 				status = http.StatusNotFound
 			}
 		}
@@ -94,27 +91,28 @@ func SetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
-		query, outbox := gactors.NewSetValueQuery(ctx, req.Table, req.Key, req.Value)
-		defer close(outbox)
-		go qp.Execute(ctx, query)
 
-		// wait for results
+		query, outbox := gactors.NewSetValueQuery(ctx, req.Table, req.Key, req.Value)
+		qp.Enqueue(ctx, query)
+
+		var status int
 		select {
-		case <-r.Context().Done():
-			ghttp.MustWriteJSON(w, r, http.StatusInternalServerError, resp)
+		case <-ctx.Done():
+			status = http.StatusInternalServerError
 		case result, ok := <-outbox:
 			switch {
 			case !ok:
-				ghttp.MustWriteJSON(w, r, http.StatusInternalServerError, resp)
+				status = http.StatusInternalServerError
 			case result.Success:
-				resp["status"] = "ok"
+				resp["status"] = "created"
 				resp["key"] = string(req.Key)
 				resp["value"] = string(req.Value)
-				ghttp.MustWriteJSON(w, r, http.StatusCreated, resp)
+				status = http.StatusCreated
 			default:
-				ghttp.MustWriteJSON(w, r, http.StatusUnprocessableEntity, resp)
+				status = http.StatusUnprocessableEntity
 			}
 		}
+		ghttp.MustWriteJSON(w, r, status, resp)
 	}
 }
 

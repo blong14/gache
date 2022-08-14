@@ -9,11 +9,10 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
+	gtrace "github.com/blong14/gache/internal"
 	gactors "github.com/blong14/gache/internal/actors"
-	genv "github.com/blong14/gache/internal/environment"
 	glog "github.com/blong14/gache/internal/logging"
 )
 
@@ -46,17 +45,9 @@ func (s *Worker) Start(ctx context.Context) {
 			if !ok {
 				return
 			}
-			var span trace.Span
-			if genv.TraceEnabled() {
-				ctx, span = s.tracer.Start(
-					query.Context(), fmt.Sprintf("%T::%s Execute", s.proxy, s.id))
-				span.SetAttributes(
-					attribute.String(
-						"query-instruction",
-						query.Header.Inst.String(),
-					),
-				)
-			}
+			ctx, span := gtrace.Trace(
+				query.Context(), s.tracer, query,
+				fmt.Sprintf("%T::%s Execute", s.proxy, s.id))
 			start := time.Now()
 			s.proxy.Execute(ctx, query)
 			glog.Track(
