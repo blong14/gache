@@ -1,3 +1,5 @@
+import json
+
 from locust import HttpUser, task
 
 
@@ -16,5 +18,5 @@ class Get(User):
 class Set(User):
     @task
     def set(self):
-        self.client.post("/set", data=dict(table="default", key="foo", value="bar"))
+        self.client.post("/set", json=dict(table="default", key="foo", value="bar"), headers={"Content-Type": "application/json"})
 

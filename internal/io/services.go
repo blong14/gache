@@ -3,13 +3,13 @@ package io
 import (
 	"context"
 	"encoding/json"
-	gproxy "github.com/blong14/gache/internal/actors/proxy"
 	"io"
 	"log"
 	"net/http"
 	"time"
 
 	gactors "github.com/blong14/gache/internal/actors"
+	gproxy "github.com/blong14/gache/internal/actors/proxy"
 	ghttp "github.com/blong14/gache/internal/io/http"
 	glog "github.com/blong14/gache/internal/logging"
 )
@@ -66,16 +66,16 @@ func GetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 }
 
 type SetValueRequest struct {
-	Table []byte `json:"table"`
-	Key   []byte `json:"key"`
-	Value []byte `json:"value"`
+	Table string `json:"table"`
+	Key   string `json:"key"`
+	Value string `json:"value"`
 }
 
 func SetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		resp := make(map[string]string)
-		body, err := r.GetBody()
-		if err != nil {
+		body := r.Body
+		if body == nil {
 			ghttp.MustWriteJSON(w, r, http.StatusInternalServerError, resp)
 			return
 		}
@@ -84,6 +84,7 @@ func SetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 
 		var req SetValueRequest
 		if err := decoder.Decode(&req); err != nil {
+			glog.Track("bad request %s", err.Error())
 			resp["error"] = err.Error()
 			ghttp.MustWriteJSON(w, r, http.StatusBadRequest, resp)
 			return
@@ -92,7 +93,7 @@ func SetValueService(qp *gproxy.QueryProxy) http.HandlerFunc {
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
 
-		query, outbox := gactors.NewSetValueQuery(ctx, req.Table, req.Key, req.Value)
+		query, outbox := gactors.NewSetValueQuery(ctx, []byte(req.Table), []byte(req.Key), []byte(req.Value))
 		qp.Enqueue(ctx, query)
 
 		var status int
