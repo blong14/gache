@@ -67,7 +67,7 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	client, err := grpc.Client("localhost:8080")
+	client, err := grpc.Client("192.168.1.206:32000")
 	if err != nil {
 		log.Println(err)
 	}

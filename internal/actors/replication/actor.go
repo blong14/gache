@@ -2,6 +2,7 @@ package replication
 
 import (
 	"context"
+	glog "github.com/blong14/gache/internal/logging"
 	"net/rpc"
 
 	gactors "github.com/blong14/gache/internal/actors"
@@ -23,7 +24,10 @@ func (r *QueryReplicator) Execute(_ context.Context, query *gactors.Query) {
 	switch query.Header.Inst {
 	case gactors.AddTable, gactors.BatchSetValue, gactors.SetValue:
 		if r.client != nil {
-			_, _ = gproxy.PublishQuery(r.client, query)
+			_, err := gproxy.PublishQuery(r.client, query)
+			if err != nil {
+				glog.Track("%s", err)
+			}
 		}
 	default:
 	}

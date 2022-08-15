@@ -45,25 +45,16 @@ func (qs *QueryService) OnQuery(req *QueryRequest, resp *QueryResponse) error {
 			attribute.String("query-instruction", req.Query.Header.Inst.String()),
 		)
 	}
-
-	done := make(chan gactor.QueryResponse, 1)
-	defer close(done)
 	query := req.Query
-	qry := gactor.NewQuery(ctx, done)
+	qry := gactor.NewQuery(ctx, nil)
 	qry.Header = query.Header
 	qry.Key = query.Key
 	qry.Value = query.Value
 	qry.Values = query.Values
 
 	qs.Proxy.Enqueue(ctx, qry)
-	select {
-	case <-ctx.Done():
-	case result, ok := <-done:
-		if !ok {
-			break
-		}
-		resp.Success = result.Success
-	}
+	r := qry.GetResponse()
+	resp.Success = r.Success
 	glog.Track("%T %v in %s", req, resp.Success, time.Since(start))
 	return nil
 }
