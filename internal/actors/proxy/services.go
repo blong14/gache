@@ -70,7 +70,7 @@ func PublishQuery(client *rpc.Client, queries ...*gactor.Query) (*QueryResponse,
 	req := new(QueryRequest)
 	req.Query = queries[0]
 	resp := new(QueryResponse)
-	err := gerrors.Append(client.Call("QueryService.OnQuery", req, resp))
+	err := client.Call("QueryService.OnQuery", req, resp)
 	return resp, err
 }
 
