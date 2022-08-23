@@ -31,6 +31,8 @@ type QueryRequest struct {
 
 type QueryResponse struct {
 	Success bool
+	Key     []byte
+	Value   []byte
 }
 
 func (qs *QueryService) OnQuery(req *QueryRequest, resp *QueryResponse) error {
@@ -55,6 +57,8 @@ func (qs *QueryService) OnQuery(req *QueryRequest, resp *QueryResponse) error {
 	qs.Proxy.Enqueue(ctx, qry)
 	r := qry.GetResponse()
 	resp.Success = r.Success
+	resp.Key = r.Key
+	resp.Value = r.Value
 	glog.Track("%T %v in %s", req, resp.Success, time.Since(start))
 	return nil
 }
