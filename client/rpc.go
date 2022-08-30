@@ -2,44 +2,57 @@ package client
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"net/rpc"
 
 	"github.com/blong14/gache/internal/actors"
-	"github.com/blong14/gache/internal/actors/proxy"
 )
 
 type GacheClient interface {
-	Get(ctx context.Context, k []byte) ([]byte, error)
-	Set(ctx context.Context, k, v []byte) error
+	Get(ctx context.Context, t, k []byte) ([]byte, error)
+	Set(ctx context.Context, t, k, v []byte) error
 }
 
 // client implements GacheClient
 type client struct {
-	conn *rpc.Client
-	db   []byte
+	conn     *rpc.Client
+	database *sql.DB
 }
 
-func New(c *rpc.Client, db []byte) GacheClient {
+func New(c *rpc.Client, db *sql.DB) GacheClient {
 	return &client{
-		conn: c,
-		db:   db,
+		conn:     c,
+		database: db,
 	}
 }
 
-func (c *client) Get(ctx context.Context, key []byte) ([]byte, error) {
-	query, done := actors.NewGetValueQuery(ctx, c.db, key)
-	defer close(done)
-	resp, err := proxy.PublishQuery(c.conn, query)
+func (c *client) Get(ctx context.Context, table, key []byte) ([]byte, error) {
+	var result *actors.QueryResponse
+	err := c.database.QueryRowContext(
+		ctx,
+		"select value from :table where key = :key",
+		sql.Named("table", table),
+		sql.Named("key", key),
+	).Scan(&result)
 	if err != nil {
-		return []byte{}, err
+		return nil, err
 	}
-	return resp.Value, nil
+	if result.Success {
+		return result.Value, nil
+	}
+	return nil, errors.New("missing value")
 }
 
-func (c *client) Set(ctx context.Context, key, value []byte) error {
-	query, done := actors.NewSetValueQuery(ctx, c.db, key, value)
-	defer close(done)
-	_, err := proxy.PublishQuery(c.conn, query)
+func (c *client) Set(ctx context.Context, table, key, value []byte) error {
+	var result *actors.QueryResponse
+	err := c.database.QueryRowContext(
+		ctx,
+		"insert into @table set key = @key, value = @value",
+		sql.Named("table", table),
+		sql.Named("key", key),
+		sql.Named("value", value),
+	).Scan(&result)
 	if err != nil {
 		return err
 	}

@@ -71,7 +71,6 @@ func New[K any, V any](comp func(k, v K) int, eql func(k, v K) bool) *SkipList[K
 }
 
 func (sl *SkipList[K, V]) skipSearch(key K, preds, succs []*mapEntry) int {
-	lFound := -1
 	pred := sl.Sentinal
 	var curr *mapEntry
 	for layer := int(sl.MaxHeight - 1); layer >= 0; layer-- {
@@ -83,11 +82,10 @@ func (sl *SkipList[K, V]) skipSearch(key K, preds, succs []*mapEntry) int {
 		preds[layer] = pred
 		succs[layer] = curr
 		if curr != nil && sl.Matcher(key, curr.key.(K)) {
-			lFound = layer
-			return lFound
+			return layer
 		}
 	}
-	return lFound
+	return -1
 }
 
 func (sl *SkipList[K, V]) Remove(k K) (V, bool) {

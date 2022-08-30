@@ -78,7 +78,7 @@ func TraceNewQuery(ctx context.Context) Query {
 }
 
 func (m *Query) String() string {
-	return fmt.Sprintf("%s %s %s", m.Header.TableName, m.Header.Inst, m.Key)
+	return fmt.Sprintf("%s %s %s %s", m.Header.TableName, m.Header.Inst, m.Key, m.Value)
 }
 
 func (m *Query) Done(r QueryResponse) {
