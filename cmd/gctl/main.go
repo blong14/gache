@@ -5,16 +5,16 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	gache "github.com/blong14/gache/client"
-	glog "github.com/blong14/gache/internal/logging"
 )
 
-func MustGetDB() *sql.DB {
+func mustGetDB() *sql.DB {
 	dsn, ok := os.LookupEnv("dsn")
 	if !ok {
 		dsn = "::memory::"
@@ -35,7 +35,7 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	go Accept(ctx, MustGetDB())
+	go accept(ctx, mustGetDB())
 
 	var s os.Signal
 	select {
@@ -44,12 +44,12 @@ func main() {
 			s = sig
 		}
 	}
-	glog.Track("\nreceived %s signal\n", s)
+	log.Printf("\nreceived %s signal\n", s)
 	cancel()
 	time.Sleep(500 * time.Millisecond)
 }
 
-func Accept(ctx context.Context, db *sql.DB) {
+func accept(ctx context.Context, db *sql.DB) {
 	fmt.Print("\n% ")
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Split(bufio.ScanLines)
@@ -62,7 +62,7 @@ func Accept(ctx context.Context, db *sql.DB) {
 		start := time.Now()
 		var result *gache.QueryResponse
 		if err := db.QueryRowContext(ctx, scanner.Text()).Scan(&result); err != nil {
-			fmt.Println(err)
+			log.Println(err)
 			fmt.Print("\n% ")
 			continue
 		}

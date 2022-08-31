@@ -22,5 +22,4 @@ test:
 	~/sdk/go1.18/bin/go test -cpu=8 -parallel=8 ./...
 
 build: init
-	~/sdk/go1.18/bin/go build -o $(PWD)/bin/gctl github.com/blong14/gache/cmd/gctl
-	~/sdk/go1.18/bin/go build -o $(PWD)/bin/gache github.com/blong14/gache
+	~/sdk/go1.18/bin/go build -o $(PWD)/bin/ github.com/blong14/gache/cmd/...

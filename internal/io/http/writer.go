@@ -9,7 +9,7 @@ import (
 	glog "github.com/blong14/gache/internal/logging"
 )
 
-func MustWriteJSON(w stdhttp.ResponseWriter, r *stdhttp.Request, status int, resp map[string]string) {
+func MustWriteJSON(w stdhttp.ResponseWriter, r *stdhttp.Request, status int, resp interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	if status >= stdhttp.StatusBadRequest {
 		w.WriteHeader(status)

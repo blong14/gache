@@ -79,7 +79,7 @@ func (c conn) Query(query string, args []driver.NamedValue) (driver.Rows, error)
 }
 
 func (c conn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
-	q, err := Parse(strings.NewReader(query))
+	q, err := parse(strings.NewReader(query))
 	if err != nil {
 		return nil, err
 	}
@@ -118,10 +118,11 @@ func (c conn) Ping() error {
 }
 
 type Driver struct {
-	ctx context.Context
+	ctx   context.Context
+	proxy *proxy.QueryProxy
 }
 
-func (d Driver) Open(dsn string) (driver.Conn, error) {
+func (d *Driver) Open(dsn string) (driver.Conn, error) {
 	var wal *gwal.Log
 	if dsn == "::memory::" {
 		wal = gwal.New()
@@ -136,10 +137,15 @@ func (d Driver) Open(dsn string) (driver.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
+	d.proxy = qp
 	proxy.StartProxy(d.ctx, qp)
 	return &conn{proxy: qp}, nil
 }
 
 func init() {
 	sql.Register("gache", &Driver{ctx: context.Background()})
+}
+
+func GetProxy(db *sql.DB) *proxy.QueryProxy {
+	return db.Driver().(*Driver).proxy
 }

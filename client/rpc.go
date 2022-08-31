@@ -48,7 +48,7 @@ func (c *client) Set(ctx context.Context, table, key, value []byte) error {
 	var result *actors.QueryResponse
 	err := c.database.QueryRowContext(
 		ctx,
-		"insert into @table set key = @key, value = @value",
+		"insert into :table set key = :key, value = :value",
 		sql.Named("table", table),
 		sql.Named("key", key),
 		sql.Named("value", value),

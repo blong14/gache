@@ -119,7 +119,7 @@ func (p *parseContext) Evaluate() error {
 	return nil
 }
 
-func Parse(src io.Reader) (*gactors.Query, error) {
+func parse(src io.Reader) (*gactors.Query, error) {
 	scanner := bufio.NewScanner(src)
 	scanner.Split(bufio.ScanWords)
 	query := gactors.NewQuery(context.Background(), nil)
