@@ -1,18 +1,15 @@
-package client
+package database
 
 import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
 	"errors"
-	"io"
-	"net/rpc"
-	"strings"
-
 	gactors "github.com/blong14/gache/internal/actors"
 	"github.com/blong14/gache/internal/actors/proxy"
-	grepl "github.com/blong14/gache/internal/actors/replication"
 	gwal "github.com/blong14/gache/internal/actors/wal"
+	"io"
+	"strings"
 )
 
 type QueryResponse = gactors.QueryResponse
@@ -50,35 +47,34 @@ func (r *rows) NextResultSet() error {
 }
 
 type conn struct {
-	conn  *rpc.Client
 	proxy *proxy.QueryProxy
 }
 
-func (c conn) Commit() error {
+func (c *conn) Commit() error {
 	return errors.New("not implemented")
 }
 
-func (c conn) Rollback() error {
+func (c *conn) Rollback() error {
 	return errors.New("not implemented")
 }
 
-func (c conn) Prepare(_ string) (driver.Stmt, error) {
+func (c *conn) Prepare(_ string) (driver.Stmt, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (c conn) Close() error {
-	return c.conn.Close()
+func (c *conn) Close() error {
+	return nil
 }
 
-func (c conn) Begin() (driver.Tx, error) {
+func (c *conn) Begin() (driver.Tx, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (c conn) Query(query string, args []driver.NamedValue) (driver.Rows, error) {
+func (c *conn) Query(query string, args []driver.NamedValue) (driver.Rows, error) {
 	return c.QueryContext(context.Background(), query, args)
 }
 
-func (c conn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+func (c *conn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	q, err := parse(strings.NewReader(query))
 	if err != nil {
 		return nil, err
@@ -101,7 +97,7 @@ func (c conn) QueryContext(ctx context.Context, query string, args []driver.Name
 	return &rows{next: resp}, nil
 }
 
-func (c conn) Ping() error {
+func (c *conn) Ping() error {
 	result, err := c.Query(
 		"select value from tables where key = %s;",
 		[]driver.NamedValue{
@@ -122,30 +118,24 @@ type Driver struct {
 	proxy *proxy.QueryProxy
 }
 
-func (d *Driver) Open(dsn string) (driver.Conn, error) {
-	var wal *gwal.Log
-	if dsn == "::memory::" {
-		wal = gwal.New()
-	} else {
-		cn, err := rpc.DialHTTP("tcp", dsn)
-		if err != nil {
-			return nil, err
-		}
-		wal = gwal.New(grepl.New(cn))
-	}
-	qp, err := proxy.NewQueryProxy(wal)
-	if err != nil {
-		return nil, err
-	}
-	d.proxy = qp
-	proxy.StartProxy(d.ctx, qp)
-	return &conn{proxy: qp}, nil
+func (d *Driver) Open(_ string) (driver.Conn, error) {
+	return &conn{proxy: d.proxy}, nil
 }
+
+var (
+	queryProxy *proxy.QueryProxy
+)
 
 func init() {
-	sql.Register("gache", &Driver{ctx: context.Background()})
+	qp, err := proxy.NewQueryProxy(gwal.New())
+	if err != nil {
+		panic(err)
+	}
+	queryProxy = qp
+	proxy.StartProxy(context.Background(), queryProxy)
+	sql.Register("gache", &Driver{ctx: context.Background(), proxy: queryProxy})
 }
 
-func GetProxy(db *sql.DB) *proxy.QueryProxy {
-	return db.Driver().(*Driver).proxy
+func GetProxy(db *sql.DB) (*proxy.QueryProxy, error) {
+	return queryProxy, nil
 }
