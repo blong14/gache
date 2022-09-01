@@ -1,12 +1,12 @@
-package client_test
+package database_test
 
 import (
 	"bytes"
 	"context"
 	"database/sql"
+	gache "github.com/blong14/gache/database"
+	"github.com/blong14/gache/internal/actors/proxy"
 	"testing"
-
-	"github.com/blong14/gache/client"
 )
 
 func MustGetDB() *sql.DB {
@@ -23,7 +23,8 @@ func MustGetDB() *sql.DB {
 
 func TestClient(t *testing.T) {
 	ctx := context.Background()
-	c := client.New(nil, MustGetDB())
+	db := MustGetDB()
+	c := gache.New(nil, db)
 	table, key, value := []byte("default"), []byte("__key__"), []byte("__value__")
 	if err := c.Set(ctx, table, key, value); err != nil {
 		t.Error(err)
@@ -39,4 +40,6 @@ func TestClient(t *testing.T) {
 	if err == nil {
 		t.Error("should not have found the key")
 	}
+	qp, _ := gache.GetProxy(db)
+	proxy.StopProxy(ctx, qp)
 }

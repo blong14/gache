@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	gache "github.com/blong14/gache/client"
+	gache "github.com/blong14/gache/database"
 	gproxy "github.com/blong14/gache/internal/actors/proxy"
 	grpc "github.com/blong14/gache/internal/io/rpc"
 	ghttp "github.com/blong14/gache/internal/server"
@@ -36,9 +36,13 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	db := mustGetDB()
+	qp, err := gache.GetProxy(db)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	rpcSRV := ghttp.Server(":8080")
-	go grpc.Start(rpcSRV, gproxy.RpcHandlers(gache.GetProxy(db)))
+	go grpc.Start(rpcSRV, gproxy.RpcHandlers(qp))
 
 	httpSRV := ghttp.Server(":8081")
 	go ghttp.Start(httpSRV, ghttp.HttpHandlers(db))
