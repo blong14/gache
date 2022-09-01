@@ -1,11 +1,9 @@
-package client_test
+package client
 
 import (
 	"bytes"
 	"strings"
 	"testing"
-
-	"github.com/blong14/gache/client"
 )
 
 func TestParse(t *testing.T) {
@@ -15,7 +13,7 @@ func TestParse(t *testing.T) {
 	}
 	for _, test := range tests {
 		reader := strings.NewReader(test)
-		query, err := client.Parse(reader)
+		query, err := parse(reader)
 		if err != nil {
 			t.Error(err)
 		}
