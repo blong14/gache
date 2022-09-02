@@ -5,14 +5,19 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
-	gactors "github.com/blong14/gache/internal/actors"
-	"github.com/blong14/gache/internal/actors/proxy"
-	gwal "github.com/blong14/gache/internal/actors/wal"
 	"io"
 	"strings"
+	"sync"
+
+	"github.com/blong14/gache/internal/actors/proxy"
+	gwal "github.com/blong14/gache/internal/actors/wal"
 )
 
-type QueryResponse = gactors.QueryResponse
+type QueryResponse struct {
+	Key     []byte
+	Value   []byte
+	Success bool
+}
 
 type rows struct {
 	next *QueryResponse
@@ -94,7 +99,13 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 	}
 	c.proxy.Enqueue(ctx, q)
 	resp := q.GetResponse()
-	return &rows{next: resp}, nil
+	return &rows{
+		next: &QueryResponse{
+			Key:     resp.Key,
+			Value:   resp.Value,
+			Success: resp.Success,
+		},
+	}, nil
 }
 
 func (c *conn) Ping() error {
@@ -113,27 +124,30 @@ func (c *conn) Ping() error {
 	return nil
 }
 
+var queryProxy *proxy.QueryProxy
+
+const MEMORY = ":memory:"
+
 type Driver struct {
-	ctx   context.Context
-	proxy *proxy.QueryProxy
+	once sync.Once
 }
 
-func (d *Driver) Open(_ string) (driver.Conn, error) {
-	return &conn{proxy: d.proxy}, nil
+func (d *Driver) Open(dsn string) (driver.Conn, error) {
+	if dsn != MEMORY {
+		return nil, errors.New("invalid dsn")
+	}
+	var err error
+	d.once.Do(func() {
+		var qp *proxy.QueryProxy
+		qp, err = proxy.NewQueryProxy(gwal.New())
+		queryProxy = qp
+		proxy.StartProxy(context.Background(), queryProxy)
+	})
+	return &conn{proxy: queryProxy}, err
 }
-
-var (
-	queryProxy *proxy.QueryProxy
-)
 
 func init() {
-	qp, err := proxy.NewQueryProxy(gwal.New())
-	if err != nil {
-		panic(err)
-	}
-	queryProxy = qp
-	proxy.StartProxy(context.Background(), queryProxy)
-	sql.Register("gache", &Driver{ctx: context.Background(), proxy: queryProxy})
+	sql.Register("gache", &Driver{})
 }
 
 func GetProxy(db *sql.DB) (*proxy.QueryProxy, error) {

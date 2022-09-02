@@ -2,11 +2,11 @@ package replication
 
 import (
 	"context"
-	glog "github.com/blong14/gache/internal/logging"
 	"net/rpc"
 
 	gactors "github.com/blong14/gache/internal/actors"
 	gproxy "github.com/blong14/gache/internal/actors/proxy"
+	glog "github.com/blong14/gache/internal/logging"
 )
 
 // QueryReplicator implements Actor interface

@@ -2,6 +2,7 @@ package reader_test
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -23,7 +24,8 @@ func TestNew(t *testing.T) {
 	t.Cleanup(func() { pool.WaitAndStop(ctx) })
 
 	start := time.Now()
-	query, done := gactors.NewLoadFromFileQuery(ctx, []byte("default"), []byte("i.csv"))
+	query, done := gactors.NewLoadFromFileQuery(
+		ctx, []byte("default"), []byte(filepath.Join("testdata", "i.csv")))
 	actor := greader.New(pool)
 	actor.Execute(ctx, query)
 	select {

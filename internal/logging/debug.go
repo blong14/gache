@@ -11,9 +11,6 @@ func init() {
 	if err := os.Setenv("DEBUG", "true"); err != nil {
 		log.Fatal(err)
 	}
-	if err := os.Setenv("TRACE", "false"); err != nil {
-		log.Fatal(err)
-	}
 }
 
 // ShouldLog returns true if in DEBUG mode
