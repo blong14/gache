@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
@@ -14,7 +15,7 @@ import (
 )
 
 func TestQueryProxy_Execute(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	qp, err := gproxy.NewQueryProxy(gwal.New())
 	if err != nil {
 		t.Error(err)
@@ -25,7 +26,8 @@ func TestQueryProxy_Execute(t *testing.T) {
 		cancel()
 	})
 
-	query, done := gactors.NewLoadFromFileQuery(ctx, []byte("default"), []byte("j.csv"))
+	query, done := gactors.NewLoadFromFileQuery(
+		ctx, []byte("default"), []byte(filepath.Join("testdata", "i.csv")))
 	qp.Enqueue(ctx, query)
 	select {
 	case <-ctx.Done():
@@ -34,50 +36,6 @@ func TestQueryProxy_Execute(t *testing.T) {
 		if !ok || !result.Success {
 			t.Error("not ok")
 			return
-		}
-	}
-
-	query, finished := gactors.NewPrintQuery(ctx, []byte("default"))
-	qp.Enqueue(ctx, query)
-	select {
-	case <-ctx.Done():
-		t.Error(ctx.Err())
-	case result, ok := <-finished:
-		if !ok || !result.Success {
-			t.Error("not ok")
-			return
-		}
-	}
-}
-
-func Benchmark_NewQueryProxy(b *testing.B) {
-	b.Setenv("DEBUG", "false")
-	b.Setenv("TRACE", "false")
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
-	qp, err := gproxy.NewQueryProxy(gwal.New())
-	if err != nil {
-		b.Error(err)
-	}
-	gproxy.StartProxy(ctx, qp)
-	b.Cleanup(func() {
-		gproxy.StopProxy(ctx, qp)
-		cancel()
-	})
-	b.ResetTimer()
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		query, done := gactors.NewLoadFromFileQuery(
-			ctx, []byte("default"), []byte("i.csv"),
-		)
-		qp.Enqueue(ctx, query)
-		select {
-		case <-ctx.Done():
-			b.Error(ctx.Err())
-			return
-		case result, ok := <-done:
-			if !ok || !result.Success {
-				b.Error("not ok")
-			}
 		}
 	}
 }

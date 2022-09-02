@@ -8,19 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
-
-	gtrace "github.com/blong14/gache/internal"
 	gactors "github.com/blong14/gache/internal/actors"
 	glog "github.com/blong14/gache/internal/logging"
 )
-
-type XActor interface {
-	Send(ctx context.Context, query *gactors.Query) bool
-	Start(ctx context.Context)
-	Stop(ctx context.Context)
-}
 
 type Worker struct {
 	id      string
@@ -28,7 +18,6 @@ type Worker struct {
 	inbox   chan *gactors.Query
 	stop    chan interface{}
 	proxy   gactors.Actor
-	tracer  trace.Tracer
 }
 
 func (s *Worker) Start(ctx context.Context) {
@@ -45,30 +34,13 @@ func (s *Worker) Start(ctx context.Context) {
 			if !ok {
 				return
 			}
-			ctx, span := gtrace.Trace(
-				query.Context(), s.tracer, query,
-				fmt.Sprintf("%T::%s Execute", s.proxy, s.id))
 			start := time.Now()
 			s.proxy.Execute(ctx, query)
 			glog.Track(
 				"%T::%s executed %s values=%d in %s",
 				s.proxy, s.id, query.Header.Inst, len(query.Values), time.Since(start),
 			)
-			if span != nil {
-				span.End()
-			}
 		}
-	}
-}
-
-func (s *Worker) Send(ctx context.Context, query *gactors.Query) bool {
-	select {
-	case <-ctx.Done():
-		return false
-	case s.inbox <- query:
-		return true
-	default:
-		return false
 	}
 }
 
@@ -96,7 +68,6 @@ func New(proxy gactors.Actor) *WorkPool {
 }
 
 func (s *WorkPool) Start(ctx context.Context) {
-	tracer := otel.Tracer("worker-pool")
 	for i := 0; i < runtime.NumCPU(); i++ {
 		worker := Worker{
 			id:      fmt.Sprintf("worker::%d", i),
@@ -104,7 +75,6 @@ func (s *WorkPool) Start(ctx context.Context) {
 			inbox:   s.inbox,
 			stop:    make(chan interface{}, 0),
 			healthz: s.healthz,
-			tracer:  tracer,
 		}
 		s.workers = append(s.workers, worker)
 		go worker.Start(ctx)

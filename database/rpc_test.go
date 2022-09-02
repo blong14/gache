@@ -4,14 +4,14 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"testing"
+
 	gache "github.com/blong14/gache/database"
 	"github.com/blong14/gache/internal/actors/proxy"
-	"testing"
 )
 
 func MustGetDB() *sql.DB {
-	dsn := "::memory::"
-	db, err := sql.Open("gache", dsn)
+	db, err := sql.Open("gache", gache.MEMORY)
 	if err != nil {
 		panic(err)
 	}

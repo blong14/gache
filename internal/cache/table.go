@@ -1,10 +1,6 @@
 package cache
 
 import (
-	"context"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
-
 	gskl "github.com/blong14/gache/internal/cache/sorted/skiplist"
 )
 
@@ -16,20 +12,13 @@ type Table[K, V any] interface {
 	Set(k K, v V)
 }
 
-type TableTracer[K, V any] interface {
-	Table[K, V]
-	TraceSet(ctx context.Context, k K, v V)
-	TraceGet(ctx context.Context, k K) (V, bool)
-}
-
 type TableOpts struct {
 	TableName []byte
 }
 
 // table implements Table interface
 type table[K, V any] struct {
-	impl   Table[K, V]
-	tracer trace.Tracer
+	impl Table[K, V]
 }
 
 func New[K, V any](comp func(k, v K) int, eql func(k, v K) bool) Table[K, V] {
@@ -37,14 +26,7 @@ func New[K, V any](comp func(k, v K) int, eql func(k, v K) bool) Table[K, V] {
 		eql = func(k, v K) bool { return comp(k, v) == 0 }
 	}
 	return &table[K, V]{
-		impl: &gskl.SkipList[K, V]{
-			Comparator: comp,
-			Matcher:    eql,
-			Sentinal:   gskl.NewMapEntry[K, V](*new(K), *new(V)),
-			MaxHeight:  gskl.MaxHeight,
-			H:          uint64(0),
-		},
-		tracer: otel.Tracer("skiplist"),
+		impl: gskl.New[K, V](comp, eql),
 	}
 }
 
@@ -66,16 +48,4 @@ func (db *table[K, V]) Remove(k K) (V, bool) {
 
 func (db *table[K, V]) Set(k K, v V) {
 	db.impl.Set(k, v)
-}
-
-func (db *table[K, V]) TraceSet(ctx context.Context, k K, v V) {
-	_, span := db.tracer.Start(ctx, "skiplist:set")
-	defer span.End()
-	db.Set(k, v)
-}
-
-func (db *table[K, V]) TraceGet(ctx context.Context, k K) (V, bool) {
-	_, span := db.tracer.Start(ctx, "skiplist:get")
-	defer span.End()
-	return db.Get(k)
 }

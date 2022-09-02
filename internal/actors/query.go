@@ -64,21 +64,17 @@ type Query struct {
 
 func NewQuery(ctx context.Context, outbox chan QueryResponse) *Query {
 	if outbox == nil {
-		q := TraceNewQuery(ctx)
-		return &q
+		outbox = make(chan QueryResponse, 1)
 	}
 	return &Query{ctx: ctx, done: outbox}
 }
 
-func TraceNewQuery(ctx context.Context) Query {
-	return Query{
-		ctx:  ctx,
-		done: make(chan QueryResponse, 1),
-	}
-}
-
 func (m *Query) String() string {
-	return fmt.Sprintf("%s %s %s %s", m.Header.TableName, m.Header.Inst, m.Key, m.Value)
+	return fmt.Sprintf(
+		"%s %s %s %s %s",
+		m.Header.FileName, m.Header.TableName,
+		m.Header.Inst, m.Key, m.Value,
+	)
 }
 
 func (m *Query) Done(r QueryResponse) {
@@ -122,16 +118,6 @@ func NewPrintQuery(ctx context.Context, db []byte) (*Query, chan QueryResponse) 
 	query.Header = QueryHeader{
 		TableName: db,
 		Inst:      Print,
-	}
-	return query, done
-}
-
-func NewRangeQuery(ctx context.Context, db []byte) (*Query, chan QueryResponse) {
-	done := make(chan QueryResponse, 1)
-	query := NewQuery(ctx, done)
-	query.Header = QueryHeader{
-		TableName: db,
-		Inst:      Range,
 	}
 	return query, done
 }

@@ -2,6 +2,7 @@ package file_test
 
 import (
 	"github.com/blong14/gache/internal/actors"
+	"path/filepath"
 	"testing"
 
 	gfile "github.com/blong14/gache/internal/io/file"
@@ -9,33 +10,23 @@ import (
 
 func TestReadCSV(t *testing.T) {
 	t.Parallel()
-	data, err := gfile.ReadCSV("i.csv")
-	if err != nil {
-		t.Error(err)
+	scanner := gfile.ScanCSV(filepath.Join("testdata", "i.csv"))
+	scanner.Init()
+	var count int
+	for scanner.Scan() {
+		count = count + len(scanner.Rows())
 	}
-	if len(data) == 0 {
+	if count == 0 {
 		t.Error("value is nil")
 	}
-}
-
-func BenchmarkReadCSV(b *testing.B) {
-	b.ReportAllocs()
-	out := make([]actors.KeyValue, 0)
-	for i := 0; i < b.N; i++ {
-		data, err := gfile.ReadCSV("i.csv")
-		if err != nil {
-			b.Error(err)
-		}
-		out = append(out, data...)
-	}
-	b.ReportMetric(float64(len(out)), "items")
+	t.Log(count)
 }
 
 func BenchmarkScanCSV(b *testing.B) {
 	b.ReportAllocs()
 	out := make([]actors.KeyValue, 0)
 	for i := 0; i < b.N; i++ {
-		reader := gfile.ScanCSV("i.csv")
+		reader := gfile.ScanCSV(filepath.Join("testdata", "i.csv"))
 		reader.Init()
 		for reader.Scan() {
 			out = append(out, reader.Rows()...)

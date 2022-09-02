@@ -144,8 +144,5 @@ func stringify(start *mapEntry, level int, count int) {
 }
 
 func (t *TreeMap[K, V]) Print() {
-	fmt.Println(t.Size())
-	// fmt.Println("************************************************")
-	// stringify(t.head, 0, 0)
-	// fmt.Println("************************************************")
+	stringify(t.head, 0, 0)
 }

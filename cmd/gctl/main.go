@@ -17,7 +17,7 @@ import (
 func mustGetDB() *sql.DB {
 	dsn, ok := os.LookupEnv("dsn")
 	if !ok {
-		dsn = "::memory::"
+		dsn = gache.MEMORY
 	}
 	db, err := sql.Open("gache", dsn)
 	if err != nil {

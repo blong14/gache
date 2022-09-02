@@ -3,9 +3,7 @@ package skiplist
 import (
 	"fmt"
 	"math/rand"
-	"sync"
 	"sync/atomic"
-	"time"
 )
 
 const MaxHeight uint8 = 20
@@ -29,20 +27,6 @@ func NewMapEntry[K, V any](k K, v V) *mapEntry {
 	}
 }
 
-var pool = sync.Pool{
-	New: func() any {
-		return make([]*mapEntry, MaxHeight, MaxHeight)
-	},
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-	for i := 0; i < 100_000; i++ {
-		preds := pool.Get().([]*mapEntry)
-		pool.Put(preds)
-	}
-}
-
 type SkipList[K any, V any] struct {
 	Sentinal   *mapEntry
 	MaxHeight  uint8
@@ -59,14 +43,10 @@ func New[K any, V any](comp func(k, v K) int, eql func(k, v K) bool) *SkipList[K
 	return &SkipList[K, V]{
 		Comparator: comp,
 		Matcher:    eql,
-		Sentinal: &mapEntry{
-			lock:     make(chan struct{}, 1),
-			nexts:    [MaxHeight]*mapEntry{},
-			topLayer: MaxHeight,
-		},
-		MaxHeight: MaxHeight,
-		H:         uint64(0),
-		count:     uint64(0),
+		Sentinal:   NewMapEntry[K, V](*new(K), *new(V)),
+		MaxHeight:  MaxHeight,
+		H:          uint64(0),
+		count:      uint64(0),
 	}
 }
 
@@ -121,10 +101,8 @@ func (sl *SkipList[K, V]) Range(f func(k K, v V) bool) {
 }
 
 func (sl *SkipList[K, V]) Get(key K) (V, bool) {
-	preds := pool.Get().([]*mapEntry)
-	defer pool.Put(preds)
-	succs := pool.Get().([]*mapEntry)
-	defer pool.Put(succs)
+	preds := make([]*mapEntry, MaxHeight, MaxHeight)
+	succs := make([]*mapEntry, MaxHeight, MaxHeight)
 	lFound := sl.skipSearch(key, preds, succs)
 	if lFound != -1 && succs[lFound].fullyLinked && !succs[lFound].marked {
 		return succs[lFound].value.(V), true
@@ -160,11 +138,9 @@ func unlock(highestLocked int, preds []*mapEntry) {
 }
 
 func (sl *SkipList[K, V]) Set(key K, value V) {
-	preds := pool.Get().([]*mapEntry)
-	defer pool.Put(preds)
-	succs := pool.Get().([]*mapEntry)
-	defer pool.Put(succs)
 	var (
+		preds         = make([]*mapEntry, MaxHeight, MaxHeight)
+		succs         = make([]*mapEntry, MaxHeight, MaxHeight)
 		valid         bool
 		topLayer      = sl.randomHeight()
 		pred          *mapEntry

@@ -6,12 +6,7 @@ import (
 	"net/rpc"
 	"time"
 
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
-
 	gactor "github.com/blong14/gache/internal/actors"
-	genv "github.com/blong14/gache/internal/environment"
 	gerrors "github.com/blong14/gache/internal/errors"
 	grpc "github.com/blong14/gache/internal/io/rpc"
 	glog "github.com/blong14/gache/internal/logging"
@@ -20,8 +15,7 @@ import (
 var ErrNilClient = gerrors.NewGError(errors.New("nil client"))
 
 type QueryService struct {
-	Proxy  *QueryProxy
-	Tracer trace.Tracer
+	Proxy *QueryProxy
 }
 
 type QueryRequest struct {
@@ -38,15 +32,6 @@ type QueryResponse struct {
 func (qs *QueryService) OnQuery(req *QueryRequest, resp *QueryResponse) error {
 	start := time.Now()
 	ctx := context.Background()
-	var span trace.Span
-	if genv.TraceEnabled() {
-		ctx, span = qs.Tracer.Start(ctx, "query-service:OnQuery")
-		defer span.End()
-		span.SetAttributes(
-			attribute.Int("query-length", len(req.Queries)),
-			attribute.String("query-instruction", req.Query.Header.Inst.String()),
-		)
-	}
 	query := req.Query
 	qry := gactor.NewQuery(ctx, nil)
 	qry.Header = query.Header
@@ -77,8 +62,7 @@ func PublishQuery(client *rpc.Client, queries ...*gactor.Query) (*QueryResponse,
 func RpcHandlers(proxy *QueryProxy) []grpc.Handler {
 	return []grpc.Handler{
 		&QueryService{
-			Tracer: otel.Tracer("query-service"),
-			Proxy:  proxy,
+			Proxy: proxy,
 		},
 	}
 }

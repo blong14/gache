@@ -114,7 +114,6 @@ func BenchmarkConcurrent_LoadMostlyHits(b *testing.B) {
 			}
 		},
 	})
-
 }
 
 func BenchmarkConcurrent_LoadOrStoreBalanced(b *testing.B) {
@@ -147,10 +146,11 @@ func BenchmarkConcurrent_LoadOrStoreBalanced(b *testing.B) {
 }
 
 func BenchmarkConcurrent_LoadOrStoreCollision(b *testing.B) {
+	key, value := []byte("key"), []byte("value")
 	benchMap(b, bench{
 		perG: func(b *testing.B, pb *testing.PB, i int, m *gskl.SkipList[[]byte, []byte]) {
 			for ; pb.Next(); i++ {
-				m.Set([]byte("key"), []byte("value"))
+				m.Set(key, value)
 			}
 		},
 	})

@@ -22,6 +22,27 @@ func newParseContext(scanner *bufio.Scanner, query *gactors.Query) *parseContext
 		scanner: scanner,
 		query:   query,
 		evaluators: map[string]func(s *bufio.Scanner, q *gactors.Query) error{
+			"copy": func(scanner *bufio.Scanner, query *gactors.Query) error {
+				query.Header.Inst = gactors.Load
+				for scanner.Scan() {
+					switch scanner.Text() {
+					case "from":
+						if scanner.Scan() {
+							file := strings.TrimSpace(scanner.Text())
+							if strings.HasSuffix(file, ";") {
+								query.Header.FileName = []byte(strings.TrimSuffix(file, ";"))
+								return nil
+							}
+							query.Header.FileName = []byte(file)
+						}
+						return nil
+					default:
+						table := strings.TrimSpace(scanner.Text())
+						query.Header.TableName = []byte(table)
+					}
+				}
+				return nil
+			},
 			"create": func(scanner *bufio.Scanner, query *gactors.Query) error {
 				query.Header.Inst = gactors.AddTable
 				return nil
