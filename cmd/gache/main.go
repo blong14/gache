@@ -11,8 +11,9 @@ import (
 
 	gache "github.com/blong14/gache/database"
 	gproxy "github.com/blong14/gache/internal/actors/proxy"
+	ghttp "github.com/blong14/gache/internal/io/http"
 	grpc "github.com/blong14/gache/internal/io/rpc"
-	ghttp "github.com/blong14/gache/internal/server"
+	ghandlers "github.com/blong14/gache/internal/server"
 )
 
 func mustGetDB() *sql.DB {
@@ -41,11 +42,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	rpcSRV := ghttp.Server(":8080")
+	rpcSRV := ghandlers.Server(":8080")
 	go grpc.Start(rpcSRV, gproxy.RpcHandlers(qp))
 
-	httpSRV := ghttp.Server(":8081")
-	go ghttp.Start(httpSRV, ghttp.HttpHandlers(db))
+	httpSRV := ghandlers.Server(":8081")
+	go ghttp.Start(httpSRV, ghandlers.HttpHandlers(db))
 
 	s := <-sigint
 	log.Printf("received %s signal\n", s)
