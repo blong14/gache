@@ -22,7 +22,7 @@ func testGet_Hit(ctx context.Context, v gactors.Actor, expected *gactors.QueryRe
 		t.Parallel()
 		query, outbox := gactors.NewSetValueQuery(ctx,
 			[]byte("default"), expected.Key, expected.Value)
-		v.Execute(query.Context(), query)
+		v.Send(query.Context(), query)
 		select {
 		case <-ctx.Done():
 			t.Error(ctx.Err())
@@ -33,7 +33,7 @@ func testGet_Hit(ctx context.Context, v gactors.Actor, expected *gactors.QueryRe
 		}
 
 		query, outbox = gactors.NewGetValueQuery(ctx, []byte("default"), expected.Key)
-		v.Execute(query.Context(), query)
+		v.Send(query.Context(), query)
 		select {
 		case <-ctx.Done():
 			t.Error(ctx.Err())

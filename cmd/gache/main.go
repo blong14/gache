@@ -10,9 +10,9 @@ import (
 	"time"
 
 	gache "github.com/blong14/gache/database"
-	gproxy "github.com/blong14/gache/internal/actors/proxy"
+	ghttp "github.com/blong14/gache/internal/io/http"
 	grpc "github.com/blong14/gache/internal/io/rpc"
-	ghttp "github.com/blong14/gache/internal/server"
+	ghandlers "github.com/blong14/gache/internal/server"
 )
 
 func mustGetDB() *sql.DB {
@@ -35,21 +35,20 @@ func main() {
 	signal.Notify(sigint, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	ctx, cancel := context.WithCancel(context.Background())
+
+	rpcSRV := ghandlers.Server(":8080")
+	go grpc.Start(rpcSRV, ghandlers.RpcHandlers())
+
 	db := mustGetDB()
-	qp, err := gache.GetProxy(db)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	rpcSRV := ghttp.Server(":8080")
-	go grpc.Start(rpcSRV, gproxy.RpcHandlers(qp))
-
-	httpSRV := ghttp.Server(":8081")
-	go ghttp.Start(httpSRV, ghttp.HttpHandlers(db))
+	httpSRV := ghandlers.Server(":8081")
+	go ghttp.Start(httpSRV, ghandlers.HttpHandlers(db))
 
 	s := <-sigint
 	log.Printf("received %s signal\n", s)
 	ghttp.Stop(ctx, httpSRV, rpcSRV)
+	if err := db.Close(); err != nil {
+		log.Print(err)
+	}
 	cancel()
 	time.Sleep(500 * time.Millisecond)
 }

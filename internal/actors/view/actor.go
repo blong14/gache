@@ -25,7 +25,7 @@ func New(wal *gwal.Log, opts *gcache.TableOpts) gactors.Actor {
 	}
 }
 
-func (va *Table) Execute(ctx context.Context, query *gactors.Query) {
+func (va *Table) Send(ctx context.Context, query *gactors.Query) {
 	switch query.Header.Inst {
 	case gactors.GetValue:
 		var resp gactors.QueryResponse
@@ -52,15 +52,17 @@ func (va *Table) Execute(ctx context.Context, query *gactors.Query) {
 		})
 		query.Done(gactors.QueryResponse{Success: true})
 	case gactors.SetValue:
-		go va.log.Execute(ctx, query)
+		go va.log.Send(ctx, query)
 		va.impl.Set(query.Key, query.Value)
-		query.Done(gactors.QueryResponse{
-			Key:     query.Key,
-			Value:   query.Value,
-			Success: true,
-		})
+		query.Done(
+			gactors.QueryResponse{
+				Key:     query.Key,
+				Value:   query.Value,
+				Success: true,
+			},
+		)
 	case gactors.BatchSetValue:
-		go va.log.Execute(ctx, query)
+		go va.log.Send(ctx, query)
 		for _, kv := range query.Values {
 			if kv.Valid() {
 				va.impl.Set(kv.Key, kv.Value)

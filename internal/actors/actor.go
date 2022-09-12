@@ -5,5 +5,5 @@ import (
 )
 
 type Actor interface {
-	Execute(ctx context.Context, query *Query)
+	Send(ctx context.Context, query *Query)
 }

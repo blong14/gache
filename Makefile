@@ -3,11 +3,7 @@ init:
 	~/sdk/go1.18/bin/go mod vendor
 
 bench: clean
-	# ~/sdk/go1.18/bin/go test sync -cpu=1 -bench=BenchmarkLoad -benchmem -run=XXX
 	~/sdk/go1.18/bin/go test -cpu=1,2,4,8 -bench=Benchmark -run=XXX ./...
-
-docs:
-	~/sdk/go1.18/bin/go doc -all
 
 clean:
 	~/sdk/go1.18/bin/go clean --cache --testcache ./...
@@ -21,5 +17,5 @@ run: lint
 test:
 	~/sdk/go1.18/bin/go test -cpu=8 -parallel=8 ./...
 
-build: init
+build:
 	~/sdk/go1.18/bin/go build -o $(PWD)/bin/ github.com/blong14/gache/cmd/...

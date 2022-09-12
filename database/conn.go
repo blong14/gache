@@ -8,6 +8,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/blong14/gache/internal/actors/proxy"
 	gwal "github.com/blong14/gache/internal/actors/wal"
@@ -68,7 +69,10 @@ func (c *conn) Prepare(_ string) (driver.Stmt, error) {
 }
 
 func (c *conn) Close() error {
-	return nil
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*1)
+	defer cancel()
+	proxy.StopProxy(ctx, queryProxy)
+	return ctx.Err()
 }
 
 func (c *conn) Begin() (driver.Tx, error) {
@@ -97,7 +101,7 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 			return nil, errors.New("invalid args")
 		}
 	}
-	c.proxy.Enqueue(ctx, q)
+	c.proxy.Send(ctx, q)
 	resp := q.GetResponse()
 	return &rows{
 		next: &QueryResponse{
@@ -150,6 +154,6 @@ func init() {
 	sql.Register("gache", &Driver{})
 }
 
-func GetProxy(db *sql.DB) (*proxy.QueryProxy, error) {
+func GetProxy() (*proxy.QueryProxy, error) {
 	return queryProxy, nil
 }
