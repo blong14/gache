@@ -24,9 +24,9 @@ func New(subs ...gactors.Actor) *Log {
 	}
 }
 
-func (w *Log) Execute(ctx context.Context, query *gactors.Query) {
+func (w *Log) Send(ctx context.Context, query *gactors.Query) {
 	w.impl.Set(query.Key, query.Value)
 	for _, sub := range w.subscriptions {
-		go sub.Execute(ctx, query)
+		go sub.Send(ctx, query)
 	}
 }
