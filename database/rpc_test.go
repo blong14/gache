@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	gache "github.com/blong14/gache/database"
-	"github.com/blong14/gache/internal/actors/proxy"
 )
 
 func MustGetDB() *sql.DB {
@@ -40,6 +39,8 @@ func TestClient(t *testing.T) {
 	if err == nil {
 		t.Error("should not have found the key")
 	}
-	qp, _ := gache.GetProxy(db)
-	proxy.StopProxy(ctx, qp)
+	err = db.Close()
+	if err != nil {
+		t.Error(err)
+	}
 }

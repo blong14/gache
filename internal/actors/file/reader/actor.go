@@ -6,7 +6,6 @@ import (
 
 	gactors "github.com/blong14/gache/internal/actors"
 	gfile "github.com/blong14/gache/internal/io/file"
-	gpool "github.com/blong14/gache/internal/pool"
 )
 
 type waiter struct {
@@ -35,19 +34,19 @@ func (w *waiter) Wait(ctx context.Context) {
 // Reader implements Actor interface
 type Reader struct {
 	table  gactors.Actor
-	pool   *gpool.WorkPool
+	pool   gactors.Actor
 	waiter *waiter
 	batch  int
 }
 
-func New(pool *gpool.WorkPool) gactors.Actor {
+func New(pool gactors.Actor) gactors.Actor {
 	return &Reader{
 		pool:   pool,
 		waiter: &waiter{chns: make([]chan gactors.QueryResponse, 0)},
 	}
 }
 
-func (f *Reader) Execute(ctx context.Context, query *gactors.Query) {
+func (f *Reader) Send(ctx context.Context, query *gactors.Query) {
 	if query.Header.Inst != gactors.Load {
 		if query != nil {
 			query.Done(gactors.QueryResponse{Success: false})
@@ -55,13 +54,13 @@ func (f *Reader) Execute(ctx context.Context, query *gactors.Query) {
 		return
 	}
 	reader := gfile.ScanCSV(string(query.Header.FileName))
+	defer reader.Close()
 	reader.Init()
 	for reader.Scan() {
 		q, done := gactors.NewBatchSetValueQuery(ctx, query.Header.TableName, reader.Rows())
 		f.waiter.Add(done)
 		f.pool.Send(ctx, q)
 	}
-	reader.Close()
 	f.waiter.Wait(ctx)
 	success := false
 	if err := reader.Err(); err == nil {

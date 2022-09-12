@@ -35,7 +35,8 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	go accept(ctx, mustGetDB())
+	db := mustGetDB()
+	go accept(ctx, db)
 
 	var s os.Signal
 	select {
@@ -45,6 +46,9 @@ func main() {
 		}
 	}
 	log.Printf("\nreceived %s signal\n", s)
+	if err := db.Close(); err != nil {
+		log.Print(err)
+	}
 	cancel()
 	time.Sleep(500 * time.Millisecond)
 }

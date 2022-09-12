@@ -10,7 +10,6 @@ import (
 	"time"
 
 	gache "github.com/blong14/gache/database"
-	gproxy "github.com/blong14/gache/internal/actors/proxy"
 	ghttp "github.com/blong14/gache/internal/io/http"
 	grpc "github.com/blong14/gache/internal/io/rpc"
 	ghandlers "github.com/blong14/gache/internal/server"
@@ -36,21 +35,20 @@ func main() {
 	signal.Notify(sigint, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	db := mustGetDB()
-	qp, err := gache.GetProxy(db)
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	rpcSRV := ghandlers.Server(":8080")
-	go grpc.Start(rpcSRV, gproxy.RpcHandlers(qp))
+	go grpc.Start(rpcSRV, ghandlers.RpcHandlers())
 
+	db := mustGetDB()
 	httpSRV := ghandlers.Server(":8081")
 	go ghttp.Start(httpSRV, ghandlers.HttpHandlers(db))
 
 	s := <-sigint
 	log.Printf("received %s signal\n", s)
 	ghttp.Stop(ctx, httpSRV, rpcSRV)
+	if err := db.Close(); err != nil {
+		log.Print(err)
+	}
 	cancel()
 	time.Sleep(500 * time.Millisecond)
 }
