@@ -48,18 +48,13 @@ type SkipList[K any, V any] struct {
 	Sentinal   *mapEntry
 	MaxHeight  uint8
 	Comparator func(k, v K) int
-	Matcher    func(k, v K) bool
 	H          uint64
 	count      uint64
 }
 
-func New[K any, V any](comp func(k, v K) int, eql func(k, v K) bool) *SkipList[K, V] {
-	if eql == nil {
-		eql = func(k, v K) bool { return comp(k, v) == 0 }
-	}
+func New[K any, V any](comp func(k K, v K) int) *SkipList[K, V] {
 	return &SkipList[K, V]{
 		Comparator: comp,
-		Matcher:    eql,
 		Sentinal:   NewMapEntry[K, V](*new(K), *new(V)),
 		MaxHeight:  MaxHeight,
 		H:          uint64(0),
@@ -78,7 +73,7 @@ func (sl *SkipList[K, V]) skipSearch(key K, preds, succs []*mapEntry) int {
 		}
 		preds[layer] = pred
 		succs[layer] = curr
-		if curr != nil && sl.Matcher(key, curr.key.(K)) {
+		if curr != nil && sl.Comparator(key, curr.key.(K)) == 0 {
 			return layer
 		}
 	}

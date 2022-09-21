@@ -14,6 +14,7 @@ import (
 	gview "github.com/blong14/gache/internal/actors/view"
 	gwal "github.com/blong14/gache/internal/actors/wal"
 	gcache "github.com/blong14/gache/internal/cache"
+	gskl "github.com/blong14/gache/internal/cache/sorted/skiplist"
 	glog "github.com/blong14/gache/internal/logging"
 )
 
@@ -70,8 +71,7 @@ func NewWorkPool(log *gwal.Log, inbox chan *gactor.Query) *WorkPool {
 		inbox:   inbox,
 		healthz: make(chan struct{}, 1),
 		log:     log,
-		tables: gcache.New[[]byte, gactor.Actor](
-			bytes.Compare, bytes.Equal),
+		tables:  gskl.New[[]byte, gactor.Actor](bytes.Compare),
 		workers: make([]Worker, 0),
 	}
 }
@@ -155,10 +155,9 @@ type QueryProxy struct {
 func NewQueryProxy(wal *gwal.Log) (*QueryProxy, error) {
 	inbox := make(chan *gactor.Query)
 	return &QueryProxy{
-		inbox: inbox,
-		pool:  NewWorkPool(wal, inbox),
-		tables: gcache.New[[]byte, gactor.Actor](
-			bytes.Compare, bytes.Equal),
+		inbox:  inbox,
+		pool:   NewWorkPool(wal, inbox),
+		tables: gskl.New[[]byte, gactor.Actor](bytes.Compare),
 	}, nil
 }
 

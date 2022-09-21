@@ -3,6 +3,7 @@ package sorted_test
 import (
 	"bytes"
 	"fmt"
+	gcache "github.com/blong14/gache/internal/cache"
 	"math/rand"
 	"os"
 	"strconv"
@@ -77,6 +78,7 @@ func BenchmarkConcurrent_LoadMostlyHits(b *testing.B) {
 func BenchmarkConcurrent_LoadOrStoreBalanced(b *testing.B) {
 	const hits, misses = 1023, 1023
 
+	value := []byte("value")
 	benchMap(b, bench{
 		setup: func(b *testing.B, m *sync.Map) {
 			for i := 0; i < hits; i++ {
@@ -92,12 +94,12 @@ func BenchmarkConcurrent_LoadOrStoreBalanced(b *testing.B) {
 			for ; pb.Next(); i++ {
 				j := i % (hits + misses)
 				if j < hits {
-					_, ok := m.Load(strconv.Itoa(j))
+					_, ok := m.Load(j)
 					if ok {
 						count++
 					}
 				} else {
-					m.Store(strconv.Itoa(j), []byte(strconv.Itoa(j)))
+					m.Store(j, value)
 				}
 			}
 		},
@@ -191,7 +193,7 @@ func BenchmarkConcurrent_RangeMap(b *testing.B) {
 	})
 
 	b.Run("skiplist range", func(b *testing.B) {
-		m := gskl.New[[]byte, struct{}](bytes.Compare, bytes.Equal)
+		m := gskl.New[[]byte, struct{}](bytes.Compare)
 		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 		for i := 0; i < 100; i++ {
 			key := []byte(strconv.Itoa(rng.Intn(100)))
@@ -223,26 +225,34 @@ func BenchmarkConcurrent_ReadWriteMap(b *testing.B) {
 		readFrac := float32(i) / 10.0
 
 		b.Run(fmt.Sprintf("map read_%d", i*10), func(b *testing.B) {
-			m := make(map[string]struct{})
+			m := make(map[uint64]struct{})
 			var mutex sync.RWMutex
 			count := make(chan struct{}, 1)
+			defer close(count)
+			keySet := make(chan uint64, 1)
 			var cnt int
-			go func(mp map[string]struct{}) {
+			var keys int
+			go func() {
 				for range count {
 					cnt++
-					go func(mpp map[string]struct{}) {
-						mutex.RLock()
-						defer mutex.RUnlock()
-						for range mpp {
-						}
-					}(mp)
 				}
-			}(m)
+			}()
+			go func() {
+				mKeys := make(map[uint64]bool)
+				for key := range keySet {
+					if _, ok := mKeys[key]; ok {
+						continue
+					}
+					b.Log(key)
+					mKeys[key] = true
+					keys++
+				}
+			}()
 			b.ResetTimer()
 			b.RunParallel(func(pb *testing.PB) {
 				rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-				key := strconv.Itoa(rng.Intn(100))
 				for pb.Next() {
+					key := gcache.Hash([]byte(strconv.Itoa(rng.Intn(100))))
 					if rng.Float32() < readFrac {
 						mutex.RLock()
 						_, ok := m[key]
@@ -254,29 +264,29 @@ func BenchmarkConcurrent_ReadWriteMap(b *testing.B) {
 						mutex.Lock()
 						m[key] = struct{}{}
 						mutex.Unlock()
+						keys++
 					}
 				}
 			})
 			b.ReportMetric(float64(cnt), "total")
+			b.ReportMetric(float64(keys), "keys")
 		})
 
 		b.Run(fmt.Sprintf("sync map read_%d", i*10), func(b *testing.B) {
 			m := sync.Map{}
 			count := make(chan struct{}, 1)
+			defer close(count)
 			var cnt int
 			go func() {
 				for range count {
 					cnt++
-					go m.Range(func(k, v any) bool {
-						return true
-					})
 				}
 			}()
 			b.ResetTimer()
 			b.RunParallel(func(pb *testing.PB) {
 				rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-				key := strconv.Itoa(rng.Intn(100))
 				for pb.Next() {
+					key := gcache.Hash([]byte(strconv.Itoa(rng.Intn(100))))
 					if rng.Float32() < readFrac {
 						_, ok := m.Load(key)
 						if ok {
@@ -291,22 +301,20 @@ func BenchmarkConcurrent_ReadWriteMap(b *testing.B) {
 		})
 
 		b.Run(fmt.Sprintf("skl read_%d", i*10), func(b *testing.B) {
-			m := gskl.New[[]byte, struct{}](bytes.Compare, bytes.Equal)
+			m := gskl.New[uint64, struct{}](gcache.Uint64Compare)
 			count := make(chan struct{}, 1)
+			defer close(count)
 			var cnt int
 			go func() {
 				for range count {
 					cnt++
-					go m.Range(func(k []byte, v struct{}) bool {
-						return true
-					})
 				}
 			}()
 			b.ResetTimer()
 			b.RunParallel(func(pb *testing.PB) {
 				rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 				for pb.Next() {
-					key := []byte(strconv.Itoa(rng.Intn(100)))
+					key := gcache.Hash([]byte(strconv.Itoa(rng.Intn(100))))
 					if rng.Float32() < readFrac {
 						_, ok := m.Get(key)
 						if ok {
