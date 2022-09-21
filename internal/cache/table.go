@@ -1,8 +1,19 @@
 package cache
 
 import (
+	"hash/maphash"
+
 	gskl "github.com/blong14/gache/internal/cache/sorted/skiplist"
 )
+
+var seed = maphash.MakeSeed()
+
+func Hash(key []byte) uint64 {
+	var h maphash.Hash
+	h.SetSeed(seed)
+	_, _ = h.Write(key)
+	return h.Sum64()
+}
 
 type Table[K, V any] interface {
 	Get(k K) (V, bool)

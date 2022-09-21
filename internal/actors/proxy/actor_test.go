@@ -45,7 +45,7 @@ func TestQueryProxy_Execute(t *testing.T) {
 func BenchmarkConcurrent_QueryProxy(b *testing.B) {
 	b.Setenv("DEBUG", "false")
 	b.Setenv("TRACE", "false")
-	for _, i := range []int{5} {
+	for _, i := range []int{3, 5, 7} {
 		readFrac := float32(i) / 10.0
 		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Second)
 		qp, err := gproxy.NewQueryProxy(gwal.New())
