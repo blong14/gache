@@ -54,6 +54,7 @@ func main() {
 }
 
 func accept(ctx context.Context, db *sql.DB) {
+	time.Sleep(1 * time.Second)
 	fmt.Print("\n% ")
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Split(bufio.ScanLines)
