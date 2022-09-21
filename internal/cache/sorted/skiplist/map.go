@@ -2,11 +2,28 @@ package skiplist
 
 import (
 	"fmt"
-	"math/rand"
 	"sync/atomic"
+	"time"
 )
 
 const MaxHeight uint8 = 20
+
+type PRNG struct {
+	seed uint64
+}
+
+func (p *PRNG) Seed(seed uint64) {
+	p.seed = seed
+}
+
+func (p *PRNG) Next() uint64 {
+	p.seed = p.seed + 1
+	a := p.seed * 15485863
+	// Will return in range 0 to 1 if seed >= 0 and -1 to 0 if seed < 0.
+	b := float64((a*a*a)%2038074743) / float64(2038074743)
+	c := float64(MaxHeight) * b
+	return uint64(c)
+}
 
 type mapEntry struct {
 	lock        chan struct{}
@@ -79,7 +96,7 @@ func (sl *SkipList[K, V]) Print() {
 		for i := uint8(0); i < sl.MaxHeight; i++ {
 			n := curr.nexts[i]
 			if n != nil {
-				out = out + fmt.Sprintf("\t(%s, %d)", n.key, i)
+				out = out + fmt.Sprintf("\t(%v, %d)", n.key, i)
 			}
 		}
 		curr = curr.nexts[0]
@@ -116,8 +133,9 @@ func (sl *SkipList[K, V]) Count() uint64 {
 }
 
 func (sl *SkipList[K, V]) randomHeight() uint64 {
-	height := rand.Int63n(int64(sl.MaxHeight))
-	return uint64(height)
+	var p PRNG
+	p.Seed(uint64(time.Now().UnixNano()))
+	return p.Next()
 }
 
 func unlock(highestLocked int, preds []*mapEntry) {
