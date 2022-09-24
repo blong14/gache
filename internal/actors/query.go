@@ -17,6 +17,7 @@ const (
 	Print
 	Range
 	SetValue
+	SumValues
 )
 
 func (i QueryInstruction) String() string {

@@ -3,7 +3,9 @@ package view
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
+	glog "github.com/blong14/gache/internal/logging"
 
 	gactors "github.com/blong14/gache/internal/actors"
 	gwal "github.com/blong14/gache/internal/actors/wal"
@@ -69,6 +71,37 @@ func (va *Table) Send(ctx context.Context, query *gactors.Query) {
 			}
 		}
 		query.Done(gactors.QueryResponse{Success: true})
+	case gactors.SumValues:
+		var count uint64
+		va.impl.Range(func(k uint64, v []byte) bool {
+			select {
+			case <-ctx.Done():
+				return false
+			default:
+			}
+			buf := bytes.NewReader(v)
+			var value uint64
+			err := binary.Read(buf, binary.BigEndian, &value)
+			if err != nil {
+				glog.Track("%s", err)
+				return false
+			}
+			count += value
+			return true
+		})
+		glog.Track("%d", count)
+		var out []byte
+		buf := bytes.NewBuffer(out)
+		if err := binary.Write(buf, binary.BigEndian, count); err != nil {
+			query.Done(gactors.QueryResponse{Success: false})
+			return
+		}
+		query.Done(
+			gactors.QueryResponse{
+				Success: true,
+				Value:   buf.Bytes(),
+			},
+		)
 	default:
 	}
 }
