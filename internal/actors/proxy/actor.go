@@ -112,19 +112,18 @@ func (w *WorkPool) Execute(ctx context.Context, query *gactor.Query) {
 		w.tables.Set(query.Header.TableName, t)
 		w.log.Send(ctx, query)
 		query.Done(gactor.QueryResponse{Success: true})
-	case gactor.GetValue, gactor.Print, gactor.Range,
-		gactor.BatchSetValue, gactor.SetValue:
-		table, ok := w.tables.Get(query.Header.TableName)
-		if !ok {
-			return
-		}
-		table.Send(ctx, query)
 	case gactor.Load:
 		glog.Track(
 			"loading csv %s for %s", query.Header.FileName, query.Header.TableName)
 		loader := gfile.New(w)
 		loader.Send(ctx, query)
 	default:
+		table, ok := w.tables.Get(query.Header.TableName)
+		if !ok {
+			query.Done(gactor.QueryResponse{Success: false})
+			return
+		}
+		table.Send(ctx, query)
 	}
 }
 
