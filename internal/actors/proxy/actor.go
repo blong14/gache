@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"log"
 	"runtime"
 	"sync"
 	"time"
@@ -128,7 +127,7 @@ func (w *WorkPool) Execute(ctx context.Context, query *gactor.Query) {
 }
 
 func (w *WorkPool) WaitAndStop(ctx context.Context) {
-	log.Printf("%T stopping...\n", w)
+	glog.Track("%T stopping...\n", w)
 	var wg sync.WaitGroup
 	for _, worker := range w.workers {
 		wg.Add(1)
@@ -139,7 +138,7 @@ func (w *WorkPool) WaitAndStop(ctx context.Context) {
 		}(worker)
 	}
 	wg.Wait()
-	log.Printf("%T stopped\n", w)
+	glog.Track("%T stopped\n", w)
 }
 
 // QueryProxy implements actors.Actor interface
@@ -165,7 +164,7 @@ func (qp *QueryProxy) Send(ctx context.Context, query *gactor.Query) {
 }
 
 func StartProxy(ctx context.Context, qp *QueryProxy) {
-	log.Println("starting query proxy")
+	glog.Track("starting query proxy")
 	qp.pool.Start(ctx)
 	for _, table := range []string{"default", "a", "b", "c"} {
 		query, done := gactor.NewAddTableQuery(
@@ -174,11 +173,11 @@ func StartProxy(ctx context.Context, qp *QueryProxy) {
 		qp.Send(ctx, query)
 		<-done
 	}
-	log.Println("default tables added")
+	glog.Track("default tables added")
 }
 
 func StopProxy(ctx context.Context, qp *QueryProxy) {
-	log.Println("stopping query proxy")
+	glog.Track("stopping query proxy")
 	qp.pool.WaitAndStop(ctx)
 	close(qp.inbox)
 }
