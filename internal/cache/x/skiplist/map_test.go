@@ -2,41 +2,49 @@ package skiplist_test
 
 import (
 	"strconv"
-	"sync"
 	"sync/atomic"
 	"testing"
 
 	gskl "github.com/blong14/gache/internal/cache/x/skiplist"
 )
 
-func get(t *testing.T, wg *sync.WaitGroup, list *gskl.SkipList) {
-	wg.Add(1)
-	defer wg.Done()
-	for i := 0; i < 1000; i++ {
-		if _, ok := list.Get(uint64(i)); !ok {
-			t.Errorf("missing key %d", i)
-		}
-	}
+type test struct {
+	setup    func(*testing.T, *gskl.SkipList)
+	run      func(t *testing.T, m *gskl.SkipList)
+	teardown func(*testing.T, *gskl.SkipList) func()
 }
 
-func set(_ *testing.T, wg *sync.WaitGroup, list *gskl.SkipList) {
-	wg.Add(1)
-	defer wg.Done()
-	for i := 0; i < 1000; i++ {
-		list.Set(uint64(i), []byte(""))
-	}
+func testMap(t *testing.T, test test) {
+	t.Run("skip list test", func(t *testing.T) {
+		t.Parallel()
+		m := gskl.New()
+		if test.setup != nil {
+			test.setup(t, m)
+		}
+		test.run(t, m)
+		if test.teardown != nil {
+			t.Cleanup(func() {
+				test.teardown(t, m)
+			})
+		}
+	})
 }
 
 func TestGetAndSet(t *testing.T) {
-	// given
-	list := gskl.New()
-	var wg sync.WaitGroup
-	set(t, &wg, list)
-	go set(t, &wg, list)
-	wg.Wait()
-	go get(t, &wg, list)
-	go get(t, &wg, list)
-	wg.Wait()
+	testMap(t, test{
+		setup: func(t *testing.T, m *gskl.SkipList) {
+			for i := 0; i < 1000; i++ {
+				m.Set(uint64(i), []byte(""))
+			}
+		},
+		run: func(t *testing.T, m *gskl.SkipList) {
+			for i := 0; i < 1000; i++ {
+				if _, ok := m.Get(uint64(i)); !ok {
+					t.Errorf("missing key %d", i)
+				}
+			}
+		},
+	})
 }
 
 type bench struct {
@@ -127,11 +135,14 @@ func BenchmarkConcurrent_LoadOrStoreBalanced(b *testing.B) {
 }
 
 func BenchmarkConcurrent_LoadOrStoreUnique(b *testing.B) {
+	value := []byte("value")
 	benchMap(b, bench{
 		perG: func(b *testing.B, pb *testing.PB, i int, m *gskl.SkipList) {
 			for ; pb.Next(); i++ {
 				if _, ok := m.Get(uint64(i)); !ok {
-					m.Set(uint64(i), []byte("value"))
+					m.Set(uint64(i), value)
+				} else {
+					b.Error("unexpected hit")
 				}
 			}
 		},
@@ -139,11 +150,22 @@ func BenchmarkConcurrent_LoadOrStoreUnique(b *testing.B) {
 }
 
 func BenchmarkConcurrent_LoadOrStoreCollision(b *testing.B) {
+	const hits = 1023
 	value := []byte("value")
 	benchMap(b, bench{
+		setup: func(b *testing.B, m *gskl.SkipList) {
+			for i := 0; i < hits; i++ {
+				m.Set(uint64(i), value)
+			}
+		},
 		perG: func(b *testing.B, pb *testing.PB, i int, m *gskl.SkipList) {
 			for ; pb.Next(); i++ {
-				m.Set(uint64(i), value)
+				j := i % hits
+				if _, ok := m.Get(uint64(j)); ok {
+					m.Set(uint64(j), value)
+				} else {
+					b.Error("unexpected miss")
+				}
 			}
 		},
 	})

@@ -115,17 +115,19 @@ func (sl *SkipList) Set(key uint64, value []byte) {
 	var p PRNG
 	p.Seed(uint64(time.Now().UnixNano()))
 	var (
-		valid         bool
-		highestLocked = -1
-		topLayer      = p.Next()
-		preds         = make([]*mapEntry, MaxHeight, MaxHeight)
-		succs         = make([]*mapEntry, MaxHeight, MaxHeight)
-		pred          *mapEntry
-		succ          *mapEntry
-		prevPred      *mapEntry
+		valid    bool
+		topLayer = p.Next()
+		pred     *mapEntry
+		succ     *mapEntry
+		prevPred *mapEntry
 	)
+loop:
 	for {
 		valid = true
+		highestLocked := -1
+		locks := make([]*mapEntry, MaxHeight)
+		preds := make([]*mapEntry, MaxHeight)
+		succs := make([]*mapEntry, MaxHeight)
 		lFound := sl.askipSearch(key, preds, succs)
 		if lFound != -1 {
 			nodeFound := succs[lFound]
@@ -134,6 +136,7 @@ func (sl *SkipList) Set(key uint64, value []byte) {
 				for !nodeFound.fullyLinked {
 				}
 				// item already in the list return early
+				unlock(highestLocked, locks)
 				return
 			}
 			continue
@@ -143,9 +146,15 @@ func (sl *SkipList) Set(key uint64, value []byte) {
 			pred = preds[layer]
 			succ = succs[layer]
 			if pred != prevPred {
-				pred.lock <- struct{}{}
-				highestLocked = int(layer)
-				prevPred = pred
+				select {
+				case pred.lock <- struct{}{}:
+					prevPred = pred
+					highestLocked = int(layer)
+					locks[layer] = pred
+				default:
+					unlock(highestLocked, locks)
+					continue loop
+				}
 			}
 			if succ != nil {
 				valid = !pred.marked && !succ.marked && pred.nexts[layer] == succ
@@ -155,7 +164,7 @@ func (sl *SkipList) Set(key uint64, value []byte) {
 			// validation failed; try again
 			// validation = for each layer, i <= topNodeLayer, preds[i], succs[i]
 			// are still adjacent at layer i and that neither is marked
-			unlock(highestLocked, preds)
+			unlock(highestLocked, locks)
 			continue
 		}
 		// at this point; this thread holds all locks
@@ -172,7 +181,7 @@ func (sl *SkipList) Set(key uint64, value []byte) {
 		if topLayer > height {
 			atomic.StoreUint64(&sl.H, topLayer)
 		}
-		unlock(highestLocked, preds)
+		unlock(highestLocked, locks)
 		return
 	}
 }
@@ -198,13 +207,12 @@ func (sl *SkipList) Print() {
 }
 
 func (sl *SkipList) Range(f func(k uint64, v []byte) bool) {
-	layer := 0
-	curr := sl.Sentinal.nexts[layer]
-	for curr != nil {
-		if ok := f(curr.key, curr.value); ok {
-			curr = curr.nexts[layer]
-		} else {
-			return
-		}
+	curr := sl.Sentinal.nexts[0]
+loop:
+	ok := f(curr.key, curr.value)
+	curr = curr.nexts[0]
+	if ok && curr != nil {
+		goto loop
 	}
+	return
 }
