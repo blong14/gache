@@ -3,7 +3,7 @@ package cache
 import (
 	"hash/maphash"
 
-	x "github.com/blong14/gache/internal/cache/x/skiplist"
+	gskl "github.com/blong14/gache/internal/cache/sorted/skiplist"
 )
 
 var seed = maphash.MakeSeed()
@@ -28,12 +28,12 @@ type TableOpts struct {
 }
 
 type TableCache struct {
-	impl *x.SkipList
+	impl *gskl.SkipList
 }
 
 func New() *TableCache {
 	return &TableCache{
-		impl: x.New(),
+		impl: gskl.New(),
 	}
 }
 

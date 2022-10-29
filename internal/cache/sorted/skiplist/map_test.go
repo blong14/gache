@@ -1,110 +1,61 @@
-//go:build !race
-
 package skiplist_test
 
 import (
 	"strconv"
-	"sync"
 	"sync/atomic"
 	"testing"
 
-	gcache "github.com/blong14/gache/internal/cache"
 	gskl "github.com/blong14/gache/internal/cache/sorted/skiplist"
 )
 
+type test struct {
+	setup    func(*testing.T, *gskl.SkipList)
+	run      func(t *testing.T, m *gskl.SkipList)
+	teardown func(*testing.T, *gskl.SkipList) func()
+}
+
+func testMap(t *testing.T, test test) {
+	t.Run("skip list test", func(t *testing.T) {
+		t.Parallel()
+		m := gskl.New()
+		if test.setup != nil {
+			test.setup(t, m)
+		}
+		test.run(t, m)
+		if test.teardown != nil {
+			t.Cleanup(func() {
+				test.teardown(t, m)
+			})
+		}
+	})
+}
+
 func TestGetAndSet(t *testing.T) {
-	// given
-	list := gskl.New[uint64, []byte](gcache.Uint64Compare)
-	expected := "value"
-	keys := []string{
-		"a",
-		"b",
-		"c",
-		"d",
-		"e",
-		"f",
-		"g",
-		"h",
-		"i",
-		"j",
-		"k",
-		"l",
-		"m",
-		"n",
-		"o",
-	}
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		// when
-		for i := 0; i < 1000; i++ {
-			list.Set(gcache.Hash([]byte(strconv.Itoa(i))), []byte("foo"))
-		}
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		// when
-		for _, key := range keys {
-			list.Set(gcache.Hash([]byte(key)), []byte(expected))
-		}
-	}()
-
-	wg.Wait()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		// then
-		for i := 0; i < 1000; i++ {
-			if value, ok := list.Get(gcache.Hash([]byte(strconv.Itoa(i)))); !ok {
-				t.Errorf("missing key %d %s", i, value)
+	testMap(t, test{
+		setup: func(t *testing.T, m *gskl.SkipList) {
+			for i := 0; i < 1000; i++ {
+				m.Set(uint64(i), []byte(""))
 			}
-		}
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		// then
-		for _, key := range keys {
-			if value, ok := list.Get(gcache.Hash([]byte(key))); !ok {
-				t.Errorf("missing key %s %s", key, value)
+		},
+		run: func(t *testing.T, m *gskl.SkipList) {
+			for i := 0; i < 1000; i++ {
+				if _, ok := m.Get(uint64(i)); !ok {
+					t.Errorf("missing key %d", i)
+				}
 			}
-		}
-	}()
-
-	wg.Wait()
+		},
+	})
 }
 
 type bench struct {
-	setup    func(*testing.B, *gskl.SkipList[uint64, []byte])
-	perG     func(b *testing.B, pb *testing.PB, i int, m *gskl.SkipList[uint64, []byte])
-	teardown func(*testing.B, *gskl.SkipList[uint64, []byte]) func()
-}
-
-func newSkipList() *gskl.SkipList[uint64, []byte] {
-	return gskl.New[uint64, []byte](func(a, b uint64) int {
-		switch {
-		case a < b:
-			return -1
-		case a == b:
-			return 0
-		case a > b:
-			return 1
-		default:
-			panic("error")
-		}
-	})
-
+	setup    func(*testing.B, *gskl.SkipList)
+	perG     func(b *testing.B, pb *testing.PB, i int, m *gskl.SkipList)
+	teardown func(*testing.B, *gskl.SkipList) func()
 }
 
 func benchMap(b *testing.B, bench bench) {
 	b.Run("skip list benchmark", func(b *testing.B) {
-		m := newSkipList()
+		m := gskl.New()
 		if bench.setup != nil {
 			bench.setup(b, m)
 		}
@@ -127,12 +78,29 @@ func BenchmarkConcurrent_LoadMostlyHits(b *testing.B) {
 	const hits, misses = 1023, 1
 
 	benchMap(b, bench{
-		setup: func(_ *testing.B, m *gskl.SkipList[uint64, []byte]) {
+		setup: func(_ *testing.B, m *gskl.SkipList) {
 			for i := 0; i < hits; i++ {
 				m.Set(uint64(i), []byte(strconv.Itoa(i)))
 			}
 		},
-		perG: func(b *testing.B, pb *testing.PB, i int, m *gskl.SkipList[uint64, []byte]) {
+		perG: func(b *testing.B, pb *testing.PB, i int, m *gskl.SkipList) {
+			for ; pb.Next(); i++ {
+				m.Get(uint64(i % (hits + misses)))
+			}
+		},
+	})
+}
+
+func BenchmarkConcurrent_LoadMostlyMisses(b *testing.B) {
+	const hits, misses = 1, 1023
+
+	benchMap(b, bench{
+		setup: func(_ *testing.B, m *gskl.SkipList) {
+			for i := 0; i < hits; i++ {
+				m.Set(uint64(i), []byte(strconv.Itoa(i)))
+			}
+		},
+		perG: func(b *testing.B, pb *testing.PB, i int, m *gskl.SkipList) {
 			for ; pb.Next(); i++ {
 				m.Get(uint64(i % (hits + misses)))
 			}
@@ -145,19 +113,18 @@ func BenchmarkConcurrent_LoadOrStoreBalanced(b *testing.B) {
 
 	value := []byte("value")
 	benchMap(b, bench{
-		setup: func(b *testing.B, m *gskl.SkipList[uint64, []byte]) {
+		setup: func(b *testing.B, m *gskl.SkipList) {
 			for i := 0; i < hits; i++ {
 				m.Set(uint64(i), value)
 			}
 		},
-		perG: func(b *testing.B, pb *testing.PB, i int, m *gskl.SkipList[uint64, []byte]) {
-			var count int
+		perG: func(b *testing.B, pb *testing.PB, i int, m *gskl.SkipList) {
 			for ; pb.Next(); i++ {
 				j := i % (hits + misses)
 				if j < hits {
 					_, ok := m.Get(uint64(j))
-					if ok {
-						count++
+					if !ok {
+						b.Fatalf("unexpected miss for %v", j)
 					}
 				} else {
 					m.Set(uint64(j), value)
@@ -167,12 +134,73 @@ func BenchmarkConcurrent_LoadOrStoreBalanced(b *testing.B) {
 	})
 }
 
-func BenchmarkConcurrent_LoadOrStoreCollision(b *testing.B) {
+func BenchmarkConcurrent_LoadOrStoreUnique(b *testing.B) {
 	value := []byte("value")
 	benchMap(b, bench{
-		perG: func(b *testing.B, pb *testing.PB, i int, m *gskl.SkipList[uint64, []byte]) {
+		perG: func(b *testing.B, pb *testing.PB, i int, m *gskl.SkipList) {
 			for ; pb.Next(); i++ {
+				if _, ok := m.Get(uint64(i)); !ok {
+					m.Set(uint64(i), value)
+				} else {
+					b.Error("unexpected hit")
+				}
+			}
+		},
+	})
+}
+
+func BenchmarkConcurrent_LoadOrStoreCollision(b *testing.B) {
+	const hits = 1023
+	value := []byte("value")
+	benchMap(b, bench{
+		setup: func(b *testing.B, m *gskl.SkipList) {
+			for i := 0; i < hits; i++ {
 				m.Set(uint64(i), value)
+			}
+		},
+		perG: func(b *testing.B, pb *testing.PB, i int, m *gskl.SkipList) {
+			for ; pb.Next(); i++ {
+				j := i % hits
+				if _, ok := m.Get(uint64(j)); ok {
+					m.Set(uint64(j), value)
+				} else {
+					b.Error("unexpected miss")
+				}
+			}
+		},
+	})
+}
+
+func BenchmarkConcurrent_AdversarialAlloc(b *testing.B) {
+	value := []byte("value")
+	benchMap(b, bench{
+		perG: func(b *testing.B, pb *testing.PB, i int, m *gskl.SkipList) {
+			var stores, loadsSinceStore int64
+			for ; pb.Next(); i++ {
+				m.Get(uint64(i))
+				if loadsSinceStore++; loadsSinceStore > stores {
+					if _, ok := m.Get(uint64(i)); !ok {
+						m.Set(uint64(i), value)
+					}
+					loadsSinceStore = 0
+					stores++
+				}
+			}
+		},
+	})
+}
+
+func BenchmarkConcurrent_Range(b *testing.B) {
+	const mapSize = 1 << 10
+	benchMap(b, bench{
+		setup: func(_ *testing.B, m *gskl.SkipList) {
+			for i := 0; i < mapSize; i++ {
+				m.Set(uint64(i), []byte(""))
+			}
+		},
+		perG: func(b *testing.B, pb *testing.PB, i int, m *gskl.SkipList) {
+			for ; pb.Next(); i++ {
+				m.Range(func(_ uint64, _ []byte) bool { return true })
 			}
 		},
 	})
