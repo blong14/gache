@@ -5,13 +5,12 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"github.com/blong14/gache/internal/actors/proxy"
+	gwal "github.com/blong14/gache/internal/actors/wal"
+	glog "github.com/blong14/gache/internal/logging"
 	"io"
 	"strings"
 	"sync"
-	"time"
-
-	"github.com/blong14/gache/internal/actors/proxy"
-	gwal "github.com/blong14/gache/internal/actors/wal"
 )
 
 type QueryResponse struct {
@@ -69,10 +68,8 @@ func (c *conn) Prepare(_ string) (driver.Stmt, error) {
 }
 
 func (c *conn) Close() error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*1)
-	defer cancel()
-	proxy.StopProxy(ctx, queryProxy)
-	return ctx.Err()
+	glog.Track("closing db connection...")
+	return nil
 }
 
 func (c *conn) Begin() (driver.Tx, error) {
