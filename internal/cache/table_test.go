@@ -12,13 +12,13 @@ func TestReader_ViewGet(t *testing.T) {
 	// given
 	k := []byte("key")
 	expected := []byte("value")
-	v := gache.New[[]byte, []byte](bytes.Compare, bytes.Equal)
+	v := gache.New()
 	v.Set(k, expected)
 	v.Set([]byte("key2"), []byte("value2"))
 	// when
 	actual, ok := v.Get(k)
 	// then
-	if !ok || !(bytes.Compare(actual, expected) == 0) {
+	if !ok || !bytes.Equal(actual, expected) {
 		t.Errorf("want %s got %s", expected, actual)
 	}
 }

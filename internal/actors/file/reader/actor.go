@@ -33,10 +33,8 @@ func (w *waiter) Wait(ctx context.Context) {
 
 // Reader implements Actor interface
 type Reader struct {
-	table  gactors.Actor
 	pool   gactors.Actor
 	waiter *waiter
-	batch  int
 }
 
 func New(pool gactors.Actor) gactors.Actor {
@@ -72,5 +70,4 @@ func (f *Reader) Send(ctx context.Context, query *gactors.Query) {
 			Value:   []byte("done"),
 		},
 	)
-	return
 }

@@ -1,8 +1,19 @@
 package cache
 
 import (
+	"hash/maphash"
+
 	gskl "github.com/blong14/gache/internal/cache/sorted/skiplist"
 )
+
+var seed = maphash.MakeSeed()
+
+func Hash(key []byte) uint64 {
+	var h maphash.Hash
+	h.SetSeed(seed)
+	_, _ = h.Write(key)
+	return h.Sum64()
+}
 
 type Table[K, V any] interface {
 	Get(k K) (V, bool)
@@ -16,36 +27,32 @@ type TableOpts struct {
 	TableName []byte
 }
 
-// table implements Table interface
-type table[K, V any] struct {
-	impl Table[K, V]
+type TableCache struct {
+	impl *gskl.SkipList
 }
 
-func New[K, V any](comp func(k, v K) int, eql func(k, v K) bool) Table[K, V] {
-	if eql == nil {
-		eql = func(k, v K) bool { return comp(k, v) == 0 }
-	}
-	return &table[K, V]{
-		impl: gskl.New[K, V](comp, eql),
+func New() *TableCache {
+	return &TableCache{
+		impl: gskl.New(),
 	}
 }
 
-func (db *table[K, V]) Get(k K) (V, bool) {
-	return db.impl.Get(k)
+func (db *TableCache) Get(k []byte) ([]byte, bool) {
+	return db.impl.Get(Hash(k))
 }
 
-func (db *table[K, V]) Print() {
+func (db *TableCache) Print() {
 	db.impl.Print()
 }
 
-func (db *table[K, V]) Range(f func(k K, v V) bool) {
+func (db *TableCache) Range(f func(k uint64, v []byte) bool) {
 	db.impl.Range(f)
 }
 
-func (db *table[K, V]) Remove(k K) (V, bool) {
-	return db.impl.Remove(k)
+func (db *TableCache) Remove(k []byte) ([]byte, bool) {
+	return db.impl.Remove(Hash(k))
 }
 
-func (db *table[K, V]) Set(k K, v V) {
-	db.impl.Set(k, v)
+func (db *TableCache) Set(k, v []byte) {
+	db.impl.Set(Hash(k), v)
 }

@@ -2,11 +2,28 @@ package skiplist
 
 import (
 	"fmt"
-	"math/rand"
 	"sync/atomic"
+	"time"
 )
 
 const MaxHeight uint8 = 20
+
+type PRNG struct {
+	seed uint64
+}
+
+func (p *PRNG) Seed(seed uint64) {
+	p.seed = seed
+}
+
+func (p *PRNG) Next() uint64 {
+	p.seed = p.seed + 1
+	a := p.seed * 15485863
+	// Will return in range 0 to 1 if seed >= 0 and -1 to 0 if seed < 0.
+	b := float64((a*a*a)%2038074743) / float64(2038074743)
+	c := float64(MaxHeight) * b
+	return uint64(c)
+}
 
 type mapEntry struct {
 	lock        chan struct{}
@@ -14,11 +31,11 @@ type mapEntry struct {
 	marked      bool
 	fullyLinked bool
 	nexts       [MaxHeight]*mapEntry
-	key         any
-	value       any
+	key         uint64
+	value       []byte
 }
 
-func NewMapEntry[K, V any](k K, v V) *mapEntry {
+func NewMapEntry(k uint64, v []byte) *mapEntry {
 	return &mapEntry{
 		lock:  make(chan struct{}, 1),
 		key:   k,
@@ -27,97 +44,54 @@ func NewMapEntry[K, V any](k K, v V) *mapEntry {
 	}
 }
 
-type SkipList[K any, V any] struct {
-	Sentinal   *mapEntry
-	MaxHeight  uint8
-	Comparator func(k, v K) int
-	Matcher    func(k, v K) bool
-	H          uint64
-	count      uint64
+type SkipList struct {
+	Sentinal  *mapEntry
+	MaxHeight uint8
+	H         uint64
+	count     uint64
 }
 
-func New[K any, V any](comp func(k, v K) int, eql func(k, v K) bool) *SkipList[K, V] {
-	if eql == nil {
-		eql = func(k, v K) bool { return comp(k, v) == 0 }
-	}
-	return &SkipList[K, V]{
-		Comparator: comp,
-		Matcher:    eql,
-		Sentinal:   NewMapEntry[K, V](*new(K), *new(V)),
-		MaxHeight:  MaxHeight,
-		H:          uint64(0),
-		count:      uint64(0),
+func New() *SkipList {
+	return &SkipList{
+		Sentinal:  NewMapEntry(0, []byte("")),
+		MaxHeight: MaxHeight,
+		H:         uint64(0),
+		count:     uint64(0),
 	}
 }
 
-func (sl *SkipList[K, V]) skipSearch(key K, preds, succs []*mapEntry) int {
-	pred := sl.Sentinal
+func (sl *SkipList) skipSearch(key uint64, preds, succs []*mapEntry) int {
 	var curr *mapEntry
-	for layer := int(sl.MaxHeight - 1); layer >= 0; layer-- {
+	pred := sl.Sentinal
+	layer := int(sl.MaxHeight - 1)
+oloop:
+	curr = pred.nexts[layer]
+iloop:
+	if curr != nil && key > curr.key {
+		pred = curr
 		curr = pred.nexts[layer]
-		for curr != nil && sl.Comparator(key, curr.key.(K)) > 0 {
-			pred = curr
-			curr = pred.nexts[layer]
-		}
-		preds[layer] = pred
-		succs[layer] = curr
-		if curr != nil && sl.Matcher(key, curr.key.(K)) {
-			return layer
-		}
+		goto iloop
+	}
+	preds[layer] = pred
+	succs[layer] = curr
+	if curr != nil && key == curr.key {
+		return layer
+	}
+	layer--
+	if layer >= 0 {
+		goto oloop
 	}
 	return -1
 }
 
-func (sl *SkipList[K, V]) Remove(k K) (V, bool) {
-	return *new(V), true
-}
-
-func (sl *SkipList[K, V]) Print() {
-	out := ""
-	curr := sl.Sentinal
-	for curr != nil {
-		for i := uint8(0); i < sl.MaxHeight; i++ {
-			n := curr.nexts[i]
-			if n != nil {
-				out = out + fmt.Sprintf("\t(%s, %d)", n.key, i)
-			}
-		}
-		curr = curr.nexts[0]
-		out = out + "\n"
-	}
-	fmt.Println(out)
-}
-
-func (sl *SkipList[K, V]) Range(f func(k K, v V) bool) {
-	layer := 0
-	curr := sl.Sentinal.nexts[layer]
-	for curr != nil {
-		if ok := f(curr.key.(K), curr.value.(V)); ok {
-			curr = curr.nexts[layer]
-		} else {
-			return
-		}
-	}
-}
-
-func (sl *SkipList[K, V]) Get(key K) (V, bool) {
-	preds := make([]*mapEntry, MaxHeight, MaxHeight)
-	succs := make([]*mapEntry, MaxHeight, MaxHeight)
+func (sl *SkipList) Get(key uint64) ([]byte, bool) {
+	preds := make([]*mapEntry, MaxHeight)
+	succs := make([]*mapEntry, MaxHeight)
 	lFound := sl.skipSearch(key, preds, succs)
 	if lFound != -1 && succs[lFound].fullyLinked && !succs[lFound].marked {
-		return succs[lFound].value.(V), true
+		return succs[lFound].value, true
 	}
-	return *new(V), false
-}
-
-func (sl *SkipList[K, V]) Count() uint64 {
-	count := atomic.LoadUint64(&sl.count)
-	return count
-}
-
-func (sl *SkipList[K, V]) randomHeight() uint64 {
-	height := rand.Int63n(int64(sl.MaxHeight))
-	return uint64(height)
+	return nil, false
 }
 
 func unlock(highestLocked int, preds []*mapEntry) {
@@ -137,27 +111,29 @@ func unlock(highestLocked int, preds []*mapEntry) {
 	}
 }
 
-func (sl *SkipList[K, V]) Set(key K, value V) {
+func (sl *SkipList) Set(key uint64, value []byte) {
+	var p PRNG
+	p.Seed(uint64(time.Now().UnixNano()))
 	var (
-		preds         = make([]*mapEntry, MaxHeight, MaxHeight)
-		succs         = make([]*mapEntry, MaxHeight, MaxHeight)
-		valid         bool
-		topLayer      = sl.randomHeight()
-		pred          *mapEntry
-		succ          *mapEntry
-		prevPred      *mapEntry
-		highestLocked = -1
+		valid    bool
+		topLayer = p.Next()
+		pred     *mapEntry
+		succ     *mapEntry
+		prevPred *mapEntry
 	)
+loop:
 	for {
 		valid = true
+		highestLocked := -1
+		locks := make([]*mapEntry, MaxHeight)
+		preds := make([]*mapEntry, MaxHeight)
+		succs := make([]*mapEntry, MaxHeight)
 		lFound := sl.skipSearch(key, preds, succs)
 		if lFound != -1 {
 			nodeFound := succs[lFound]
 			if nodeFound != nil && !nodeFound.marked {
-				// block until fully linked
-				for !nodeFound.fullyLinked {
-				}
 				// item already in the list return early
+				unlock(highestLocked, locks)
 				return
 			}
 			continue
@@ -167,9 +143,15 @@ func (sl *SkipList[K, V]) Set(key K, value V) {
 			pred = preds[layer]
 			succ = succs[layer]
 			if pred != prevPred {
-				pred.lock <- struct{}{}
-				highestLocked = int(layer)
-				prevPred = pred
+				select {
+				case pred.lock <- struct{}{}:
+					prevPred = pred
+					highestLocked = int(layer)
+					locks[layer] = pred
+				default:
+					unlock(highestLocked, locks)
+					continue loop
+				}
 			}
 			if succ != nil {
 				valid = !pred.marked && !succ.marked && pred.nexts[layer] == succ
@@ -179,7 +161,7 @@ func (sl *SkipList[K, V]) Set(key K, value V) {
 			// validation failed; try again
 			// validation = for each layer, i <= topNodeLayer, preds[i], succs[i]
 			// are still adjacent at layer i and that neither is marked
-			unlock(highestLocked, preds)
+			unlock(highestLocked, locks)
 			continue
 		}
 		// at this point; this thread holds all locks
@@ -196,7 +178,37 @@ func (sl *SkipList[K, V]) Set(key K, value V) {
 		if topLayer > height {
 			atomic.StoreUint64(&sl.H, topLayer)
 		}
-		unlock(highestLocked, preds)
+		unlock(highestLocked, locks)
 		return
+	}
+}
+
+func (sl *SkipList) Remove(k uint64) ([]byte, bool) {
+	return nil, true
+}
+
+func (sl *SkipList) Print() {
+	out := ""
+	curr := sl.Sentinal
+	for curr != nil {
+		for i := uint8(0); i < sl.MaxHeight; i++ {
+			n := curr.nexts[i]
+			if n != nil {
+				out = out + fmt.Sprintf("\t(%v, %d)", n.key, i)
+			}
+		}
+		curr = curr.nexts[0]
+		out = out + "\n"
+	}
+	fmt.Println(out)
+}
+
+func (sl *SkipList) Range(f func(k uint64, v []byte) bool) {
+	curr := sl.Sentinal.nexts[0]
+loop:
+	ok := f(curr.key, curr.value)
+	curr = curr.nexts[0]
+	if ok && curr != nil {
+		goto loop
 	}
 }

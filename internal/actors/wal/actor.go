@@ -1,7 +1,6 @@
 package wal
 
 import (
-	"bytes"
 	"context"
 
 	gactors "github.com/blong14/gache/internal/actors"
@@ -10,7 +9,7 @@ import (
 
 // Log implements gactors.Actor
 type Log struct {
-	impl          gcache.Table[[]byte, []byte]
+	impl          *gcache.TableCache
 	subscriptions []gactors.Actor
 }
 
@@ -19,7 +18,7 @@ var _ gactors.Actor = &Log{}
 
 func New(subs ...gactors.Actor) *Log {
 	return &Log{
-		impl:          gcache.New[[]byte, []byte](bytes.Compare, bytes.Equal),
+		impl:          gcache.New(),
 		subscriptions: subs,
 	}
 }

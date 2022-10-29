@@ -38,13 +38,7 @@ func main() {
 	db := mustGetDB()
 	go accept(ctx, db)
 
-	var s os.Signal
-	select {
-	case sig, ok := <-sigint:
-		if ok {
-			s = sig
-		}
-	}
+	s := <-sigint
 	log.Printf("\nreceived %s signal\n", s)
 	if err := db.Close(); err != nil {
 		log.Print(err)
@@ -54,6 +48,7 @@ func main() {
 }
 
 func accept(ctx context.Context, db *sql.DB) {
+	time.Sleep(1 * time.Second)
 	fmt.Print("\n% ")
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Split(bufio.ScanLines)

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"log"
 	"runtime"
 	"sync"
 	"time"
@@ -14,6 +13,7 @@ import (
 	gview "github.com/blong14/gache/internal/actors/view"
 	gwal "github.com/blong14/gache/internal/actors/wal"
 	gcache "github.com/blong14/gache/internal/cache"
+	gtable "github.com/blong14/gache/internal/cache/sorted/tablemap"
 	glog "github.com/blong14/gache/internal/logging"
 )
 
@@ -70,8 +70,7 @@ func NewWorkPool(log *gwal.Log, inbox chan *gactor.Query) *WorkPool {
 		inbox:   inbox,
 		healthz: make(chan struct{}, 1),
 		log:     log,
-		tables: gcache.New[[]byte, gactor.Actor](
-			bytes.Compare, bytes.Equal),
+		tables:  gtable.New[[]byte, gactor.Actor](bytes.Compare),
 		workers: make([]Worker, 0),
 	}
 }
@@ -81,7 +80,7 @@ func (w *WorkPool) Start(ctx context.Context) {
 		worker := Worker{
 			id:      fmt.Sprintf("worker::%d", i),
 			inbox:   w.inbox,
-			stop:    make(chan interface{}, 0),
+			stop:    make(chan interface{}),
 			healthz: w.healthz,
 			pool:    w,
 		}
@@ -112,24 +111,23 @@ func (w *WorkPool) Execute(ctx context.Context, query *gactor.Query) {
 		w.tables.Set(query.Header.TableName, t)
 		w.log.Send(ctx, query)
 		query.Done(gactor.QueryResponse{Success: true})
-	case gactor.GetValue, gactor.Print, gactor.Range,
-		gactor.BatchSetValue, gactor.SetValue:
-		table, ok := w.tables.Get(query.Header.TableName)
-		if !ok {
-			return
-		}
-		table.Send(ctx, query)
 	case gactor.Load:
 		glog.Track(
 			"loading csv %s for %s", query.Header.FileName, query.Header.TableName)
 		loader := gfile.New(w)
 		loader.Send(ctx, query)
 	default:
+		table, ok := w.tables.Get(query.Header.TableName)
+		if !ok {
+			query.Done(gactor.QueryResponse{Success: false})
+			return
+		}
+		table.Send(ctx, query)
 	}
 }
 
 func (w *WorkPool) WaitAndStop(ctx context.Context) {
-	log.Printf("%T stopping...\n", w)
+	glog.Track("%T stopping...\n", w)
 	var wg sync.WaitGroup
 	for _, worker := range w.workers {
 		wg.Add(1)
@@ -140,7 +138,7 @@ func (w *WorkPool) WaitAndStop(ctx context.Context) {
 		}(worker)
 	}
 	wg.Wait()
-	log.Printf("%T stopped\n", w)
+	glog.Track("%T stopped\n", w)
 }
 
 // QueryProxy implements actors.Actor interface
@@ -155,10 +153,9 @@ type QueryProxy struct {
 func NewQueryProxy(wal *gwal.Log) (*QueryProxy, error) {
 	inbox := make(chan *gactor.Query)
 	return &QueryProxy{
-		inbox: inbox,
-		pool:  NewWorkPool(wal, inbox),
-		tables: gcache.New[[]byte, gactor.Actor](
-			bytes.Compare, bytes.Equal),
+		inbox:  inbox,
+		pool:   NewWorkPool(wal, inbox),
+		tables: gtable.New[[]byte, gactor.Actor](bytes.Compare),
 	}, nil
 }
 
@@ -167,7 +164,7 @@ func (qp *QueryProxy) Send(ctx context.Context, query *gactor.Query) {
 }
 
 func StartProxy(ctx context.Context, qp *QueryProxy) {
-	log.Println("starting query proxy")
+	glog.Track("starting query proxy")
 	qp.pool.Start(ctx)
 	for _, table := range []string{"default", "a", "b", "c"} {
 		query, done := gactor.NewAddTableQuery(
@@ -176,11 +173,11 @@ func StartProxy(ctx context.Context, qp *QueryProxy) {
 		qp.Send(ctx, query)
 		<-done
 	}
-	log.Println("default tables added")
+	glog.Track("default tables added")
 }
 
 func StopProxy(ctx context.Context, qp *QueryProxy) {
-	log.Println("stopping query proxy")
+	glog.Track("stopping query proxy")
 	qp.pool.WaitAndStop(ctx)
 	close(qp.inbox)
 }

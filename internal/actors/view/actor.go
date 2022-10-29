@@ -1,7 +1,6 @@
 package view
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 
@@ -13,7 +12,7 @@ import (
 // Table implements Actor
 type Table struct {
 	log  *gwal.Log
-	impl gcache.Table[[]byte, []byte]
+	impl *gcache.TableCache
 	name []byte
 }
 
@@ -21,7 +20,7 @@ func New(wal *gwal.Log, opts *gcache.TableOpts) gactors.Actor {
 	return &Table{
 		name: opts.TableName,
 		log:  wal,
-		impl: gcache.New[[]byte, []byte](bytes.Compare, bytes.Equal),
+		impl: gcache.New(),
 	}
 }
 
@@ -41,13 +40,13 @@ func (va *Table) Send(ctx context.Context, query *gactors.Query) {
 		va.impl.Print()
 		query.Done(gactors.QueryResponse{Success: true})
 	case gactors.Range:
-		va.impl.Range(func(k, v []byte) bool {
+		va.impl.Range(func(k uint64, v []byte) bool {
 			select {
 			case <-ctx.Done():
 				return false
 			default:
 			}
-			fmt.Printf("%s\n", k)
+			fmt.Printf("%v\n", k)
 			return true
 		})
 		query.Done(gactors.QueryResponse{Success: true})
@@ -65,7 +64,7 @@ func (va *Table) Send(ctx context.Context, query *gactors.Query) {
 		go va.log.Send(ctx, query)
 		for _, kv := range query.Values {
 			if kv.Valid() {
-				va.impl.Set(kv.Key, kv.Value)
+				va.impl.Set(query.Key, kv.Value)
 			}
 		}
 		query.Done(gactors.QueryResponse{Success: true})
