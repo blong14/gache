@@ -38,13 +38,7 @@ func main() {
 	db := mustGetDB()
 	go accept(ctx, db)
 
-	var s os.Signal
-	select {
-	case sig, ok := <-sigint:
-		if ok {
-			s = sig
-		}
-	}
+	s := <-sigint
 	log.Printf("\nreceived %s signal\n", s)
 	if err := db.Close(); err != nil {
 		log.Print(err)

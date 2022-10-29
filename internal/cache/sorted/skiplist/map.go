@@ -60,7 +60,7 @@ func New() *SkipList {
 	}
 }
 
-func (sl *SkipList) askipSearch(key uint64, preds, succs []*mapEntry) int {
+func (sl *SkipList) skipSearch(key uint64, preds, succs []*mapEntry) int {
 	var curr *mapEntry
 	pred := sl.Sentinal
 	layer := int(sl.MaxHeight - 1)
@@ -85,9 +85,9 @@ iloop:
 }
 
 func (sl *SkipList) Get(key uint64) ([]byte, bool) {
-	preds := make([]*mapEntry, MaxHeight, MaxHeight)
-	succs := make([]*mapEntry, MaxHeight, MaxHeight)
-	lFound := sl.askipSearch(key, preds, succs)
+	preds := make([]*mapEntry, MaxHeight)
+	succs := make([]*mapEntry, MaxHeight)
+	lFound := sl.skipSearch(key, preds, succs)
 	if lFound != -1 && succs[lFound].fullyLinked && !succs[lFound].marked {
 		return succs[lFound].value, true
 	}
@@ -128,13 +128,10 @@ loop:
 		locks := make([]*mapEntry, MaxHeight)
 		preds := make([]*mapEntry, MaxHeight)
 		succs := make([]*mapEntry, MaxHeight)
-		lFound := sl.askipSearch(key, preds, succs)
+		lFound := sl.skipSearch(key, preds, succs)
 		if lFound != -1 {
 			nodeFound := succs[lFound]
 			if nodeFound != nil && !nodeFound.marked {
-				// block until fully linked
-				for !nodeFound.fullyLinked {
-				}
 				// item already in the list return early
 				unlock(highestLocked, locks)
 				return
@@ -214,5 +211,4 @@ loop:
 	if ok && curr != nil {
 		goto loop
 	}
-	return
 }

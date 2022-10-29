@@ -5,11 +5,10 @@ import (
 )
 
 type mapEntry struct {
-	left   *mapEntry
-	right  *mapEntry
-	parent *mapEntry
-	key    any
-	value  any
+	left  *mapEntry
+	right *mapEntry
+	key   any
+	value any
 }
 
 func (m *mapEntry) String() string {

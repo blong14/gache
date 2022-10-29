@@ -2,14 +2,14 @@ package file
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"os"
 
 	"github.com/blong14/gache/internal/actors"
 	gerrors "github.com/blong14/gache/internal/errors"
 )
 
 func ReadJSON(data string) ([]actors.KeyValue, error) {
-	js, err := ioutil.ReadFile(data)
+	js, err := os.ReadFile(data)
 	if err != nil {
 		return nil, gerrors.NewGError(err)
 	}

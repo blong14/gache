@@ -9,7 +9,7 @@ clean:
 	~/sdk/go1.18/bin/go clean --cache --testcache ./...
 
 lint:
-	docker run --rm -v $(PWD):/app -w /app golangci/golangci-lint:v1.45.2 golangci-lint run
+	docker run --rm -v $(PWD):/app -w /app golangci/golangci-lint:v1.50 golangci-lint run
 
 run: lint
 	~/sdk/go1.18/bin/go run github.com/blong14/gache

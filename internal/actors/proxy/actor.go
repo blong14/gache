@@ -80,7 +80,7 @@ func (w *WorkPool) Start(ctx context.Context) {
 		worker := Worker{
 			id:      fmt.Sprintf("worker::%d", i),
 			inbox:   w.inbox,
-			stop:    make(chan interface{}, 0),
+			stop:    make(chan interface{}),
 			healthz: w.healthz,
 			pool:    w,
 		}

@@ -135,6 +135,7 @@ func BenchmarkConcurrent_LoadOrStoreBalanced(b *testing.B) {
 }
 
 func BenchmarkConcurrent_LoadOrStoreUnique(b *testing.B) {
+	b.Skip("skipping...")
 	value := []byte("value")
 	benchMap(b, bench{
 		perG: func(b *testing.B, pb *testing.PB, i int, m *gskl.SkipList) {

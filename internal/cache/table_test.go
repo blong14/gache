@@ -18,7 +18,7 @@ func TestReader_ViewGet(t *testing.T) {
 	// when
 	actual, ok := v.Get(k)
 	// then
-	if !ok || !(bytes.Compare(actual, expected) == 0) {
+	if !ok || !bytes.Equal(actual, expected) {
 		t.Errorf("want %s got %s", expected, actual)
 	}
 }
