@@ -8,9 +8,8 @@ import (
 	"sync"
 	"time"
 
-	gcache "github.com/blong14/gache/internal/db"
 	gdb "github.com/blong14/gache/internal/db"
-	gtable "github.com/blong14/gache/internal/db/sorted/tablemap"
+	gtable "github.com/blong14/gache/internal/db/tablemap"
 	glog "github.com/blong14/gache/internal/logging"
 	gfile "github.com/blong14/gache/internal/proxy/file"
 	gview "github.com/blong14/gache/internal/proxy/view"
@@ -57,7 +56,7 @@ func (s *Worker) Stop(ctx context.Context) {
 type WorkPool struct {
 	inbox chan *gdb.Query
 	// table name to table view
-	tables  gdb.Table[[]byte, *gview.Table]
+	tables  *gtable.TableMap[[]byte, *gview.Table]
 	workers []Worker
 }
 
@@ -92,11 +91,11 @@ func (w *WorkPool) Send(ctx context.Context, query *gdb.Query) {
 func (w *WorkPool) Execute(ctx context.Context, query *gdb.Query) {
 	switch query.Header.Inst {
 	case gdb.AddTable:
-		var opts *gcache.TableOpts
+		var opts *gdb.TableOpts
 		if query.Header.Opts != nil {
 			opts = query.Header.Opts
 		} else {
-			opts = &gcache.TableOpts{
+			opts = &gdb.TableOpts{
 				TableName: query.Header.TableName,
 			}
 		}
@@ -134,17 +133,15 @@ func (w *WorkPool) WaitAndStop(ctx context.Context) {
 }
 
 type QueryProxy struct {
-	inbox  chan *gdb.Query
-	pool   *WorkPool
-	tables gdb.Table[[]byte, *gview.Table]
+	inbox chan *gdb.Query
+	pool  *WorkPool
 }
 
 func NewQueryProxy() (*QueryProxy, error) {
 	inbox := make(chan *gdb.Query)
 	return &QueryProxy{
-		inbox:  inbox,
-		pool:   NewWorkPool(inbox),
-		tables: gtable.New[[]byte, *gview.Table](bytes.Compare),
+		inbox: inbox,
+		pool:  NewWorkPool(inbox),
 	}, nil
 }
 

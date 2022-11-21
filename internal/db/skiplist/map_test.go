@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	gskl "github.com/blong14/gache/internal/db/sorted/skiplist"
+	gskl "github.com/blong14/gache/internal/db/skiplist"
 )
 
 type test struct {

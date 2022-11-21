@@ -5,7 +5,7 @@ import (
 	"os"
 
 	garena "github.com/blong14/gache/internal/db/arena"
-	gskl "github.com/blong14/gache/internal/db/sorted/skiplist"
+	gskl "github.com/blong14/gache/internal/db/skiplist"
 )
 
 var seed = maphash.MakeSeed()

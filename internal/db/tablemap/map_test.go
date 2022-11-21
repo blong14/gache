@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	gtable "github.com/blong14/gache/internal/db/sorted/tablemap"
+	gtable "github.com/blong14/gache/internal/db/tablemap"
 )
 
 func testGetAndSet(t *testing.T) {
