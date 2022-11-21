@@ -4,35 +4,35 @@ import (
 	"strings"
 	"testing"
 
-	gactors "github.com/blong14/gache/internal/actors"
+	gdb "github.com/blong14/gache/internal/db"
 )
 
 func TestParse(t *testing.T) {
-	tests := map[string]*gactors.Query{
+	tests := map[string]*gdb.Query{
 		"select value from default where key = __key__;": {
-			Header: gactors.QueryHeader{
-				Inst:      gactors.GetValue,
+			Header: gdb.QueryHeader{
+				Inst:      gdb.GetValue,
 				TableName: []byte("default")},
 			Key: []byte("__key__"),
 		},
 		"insert into default set key = _key, value = _value;": {
-			Header: gactors.QueryHeader{
-				Inst:      gactors.SetValue,
+			Header: gdb.QueryHeader{
+				Inst:      gdb.SetValue,
 				TableName: []byte("default"),
 			},
 			Key:   []byte("_key"),
 			Value: []byte("_value"),
 		},
 		"copy default from ./persons.csv;": {
-			Header: gactors.QueryHeader{
-				Inst:      gactors.Load,
+			Header: gdb.QueryHeader{
+				Inst:      gdb.Load,
 				TableName: []byte("default"),
 				FileName:  []byte("./persons.csv"),
 			},
 		},
 		"create table default;": {
-			Header: gactors.QueryHeader{
-				Inst:      gactors.AddTable,
+			Header: gdb.QueryHeader{
+				Inst:      gdb.AddTable,
 				TableName: []byte("default"),
 			},
 		},

@@ -7,11 +7,11 @@ import (
 	"time"
 
 	gache "github.com/blong14/gache/database"
-	gactor "github.com/blong14/gache/internal/actors"
-	gproxy "github.com/blong14/gache/internal/actors/proxy"
+	gdb "github.com/blong14/gache/internal/db"
 	gerrors "github.com/blong14/gache/internal/errors"
 	grpc "github.com/blong14/gache/internal/io/rpc"
 	glog "github.com/blong14/gache/internal/logging"
+	gproxy "github.com/blong14/gache/internal/proxy"
 )
 
 var ErrNilClient = gerrors.NewGError(errors.New("nil client"))
@@ -21,8 +21,8 @@ type QueryService struct {
 }
 
 type QueryRequest struct {
-	Queries []*gactor.Query
-	Query   *gactor.Query
+	Queries []*gdb.Query
+	Query   *gdb.Query
 }
 
 type QueryResponse struct {
@@ -35,7 +35,7 @@ func (qs *QueryService) OnQuery(req *QueryRequest, resp *QueryResponse) error {
 	start := time.Now()
 	ctx := context.Background()
 	query := req.Query
-	qry := gactor.NewQuery(ctx, nil)
+	qry := gdb.NewQuery(ctx, nil)
 	qry.Header = query.Header
 	qry.Key = query.Key
 	qry.Value = query.Value
@@ -50,7 +50,7 @@ func (qs *QueryService) OnQuery(req *QueryRequest, resp *QueryResponse) error {
 	return nil
 }
 
-func PublishQuery(client *rpc.Client, queries ...*gactor.Query) (*QueryResponse, error) {
+func PublishQuery(client *rpc.Client, queries ...*gdb.Query) (*QueryResponse, error) {
 	if client == nil {
 		return nil, ErrNilClient
 	}

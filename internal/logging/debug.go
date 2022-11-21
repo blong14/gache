@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	genv "github.com/blong14/gache/internal/environment"
+	genv "github.com/blong14/gache/internal/environ"
 )
 
 func init() {
