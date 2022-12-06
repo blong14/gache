@@ -39,6 +39,7 @@ func (i QueryInstruction) String() string {
 }
 
 type QueryHeader struct {
+	DataDir   []byte
 	TableName []byte
 	Opts      *TableOpts
 	FileName  []byte
@@ -159,6 +160,17 @@ func NewAddTableQuery(ctx context.Context, db []byte) (*Query, chan QueryRespons
 	done := make(chan QueryResponse, 1)
 	query := NewQuery(ctx, done)
 	query.Header = QueryHeader{
+		TableName: db,
+		Inst:      AddTable,
+	}
+	return query, done
+}
+
+func XNewAddTableQuery(ctx context.Context, dir, db []byte) (*Query, chan QueryResponse) {
+	done := make(chan QueryResponse, 1)
+	query := NewQuery(ctx, done)
+	query.Header = QueryHeader{
+		DataDir:   dir,
 		TableName: db,
 		Inst:      AddTable,
 	}

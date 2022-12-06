@@ -9,8 +9,8 @@ import (
 	"time"
 
 	gdb "github.com/blong14/gache/internal/db"
-	gtable "github.com/blong14/gache/internal/db/tablemap"
 	glog "github.com/blong14/gache/internal/logging"
+	gtable "github.com/blong14/gache/internal/map/tablemap"
 	gfile "github.com/blong14/gache/internal/proxy/file"
 	gview "github.com/blong14/gache/internal/proxy/view"
 )
@@ -97,6 +97,7 @@ func (w *WorkPool) Execute(ctx context.Context, query *gdb.Query) {
 		} else {
 			opts = &gdb.TableOpts{
 				TableName: query.Header.TableName,
+				InMemory:  true,
 			}
 		}
 		t := gview.New(opts)
@@ -153,9 +154,7 @@ func StartProxy(ctx context.Context, qp *QueryProxy) {
 	glog.Track("starting query proxy")
 	qp.pool.Start(ctx)
 	for _, table := range []string{"default"} {
-		query, done := gdb.NewAddTableQuery(
-			ctx, []byte(table),
-		)
+		query, done := gdb.NewAddTableQuery(ctx, []byte(table))
 		qp.Send(ctx, query)
 		<-done
 	}

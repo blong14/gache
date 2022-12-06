@@ -50,7 +50,8 @@ func TestViewActor_Get(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	opts := &gdb.TableOpts{
-		TableName: []byte("default.dat"),
+		TableName: []byte("default"),
+		InMemory:  true,
 	}
 	v := gview.New(opts)
 	hit := &gdb.QueryResponse{

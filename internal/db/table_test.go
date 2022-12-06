@@ -8,33 +8,30 @@ import (
 )
 
 func TestReader_ViewGet(t *testing.T) {
-	t.Parallel()
-	// given
-	k := []byte("key")
-	expected := []byte("value")
-	v := gdb.New()
-	defer v.Close()
-	v.Set(k, expected)
-	v.Set([]byte("key2"), []byte("value2"))
-	// when
-	actual, ok := v.Get(k)
-	// then
-	if !ok || !bytes.Equal(actual, expected) {
-		t.Errorf("want %s got %s", expected, actual)
+	key := []byte("name")
+	expected := []byte("__value__")
+	opts := &gdb.TableOpts{
+		DataDir:   []byte("testdata"),
+		TableName: []byte("default"),
+		InMemory:  false,
 	}
-}
 
-func TestReader_ViewLoad(t *testing.T) {
-	t.Parallel()
+	db := gdb.New(opts)
+	defer db.Close()
+
 	// given
-	k := []byte("key")
-	expected := []byte("value")
-	v := gdb.New()
-	defer v.Close()
-	v.Set(k, expected)
-	v.Set([]byte("key2"), []byte("value2"))
+	err := db.Set(key, expected)
+	if err != nil {
+		t.Error(err)
+	}
+	err = db.Set([]byte("__test__"), []byte("__value__"))
+	if err != nil {
+		t.Error(err)
+	}
+
 	// when
-	actual, ok := v.Get(k)
+	actual, ok := db.Get(key)
+
 	// then
 	if !ok || !bytes.Equal(actual, expected) {
 		t.Errorf("want %s got %s", expected, actual)

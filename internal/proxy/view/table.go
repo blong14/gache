@@ -3,20 +3,21 @@ package view
 import (
 	"context"
 	"fmt"
+	"log"
 
 	gdb "github.com/blong14/gache/internal/db"
+	gerrors "github.com/blong14/gache/internal/errors"
 )
 
 type Table struct {
-	impl *gdb.TableCache
+	impl gdb.Table
 	name []byte
 }
 
 func New(opts *gdb.TableOpts) *Table {
-	impl := gdb.New()
 	return &Table{
 		name: opts.TableName,
-		impl: impl,
+		impl: gdb.New(opts),
 	}
 }
 
@@ -36,7 +37,7 @@ func (va *Table) Execute(ctx context.Context, query *gdb.Query) {
 		va.impl.Print()
 		query.Done(gdb.QueryResponse{Success: true})
 	case gdb.Range:
-		va.impl.Range(func(k uint64, v []byte) bool {
+		va.impl.Range(func(k, v []byte) bool {
 			select {
 			case <-ctx.Done():
 				return false
@@ -47,7 +48,10 @@ func (va *Table) Execute(ctx context.Context, query *gdb.Query) {
 		})
 		query.Done(gdb.QueryResponse{Success: true})
 	case gdb.SetValue:
-		va.impl.Set(query.Key, query.Value)
+		if err := va.impl.Set(query.Key, query.Value); err != nil {
+			query.Done(gdb.QueryResponse{Success: false})
+			return
+		}
 		query.Done(
 			gdb.QueryResponse{
 				Key:     query.Key,
@@ -56,10 +60,14 @@ func (va *Table) Execute(ctx context.Context, query *gdb.Query) {
 			},
 		)
 	case gdb.BatchSetValue:
+		var errs *gerrors.Error
 		for _, kv := range query.Values {
 			if kv.Valid() {
-				va.impl.Set(query.Key, kv.Value)
+				errs = gerrors.Append(errs, va.impl.Set(query.Key, kv.Value))
 			}
+		}
+		if errs.ErrorOrNil() != nil {
+			log.Println(errs)
 		}
 		query.Done(gdb.QueryResponse{Success: true})
 	default:

@@ -27,7 +27,7 @@ func TestQueryProxy_Execute(t *testing.T) {
 
 	start := time.Now()
 	query, done := gdb.NewLoadFromFileQuery(
-		ctx, []byte("default.dat"), []byte(filepath.Join("testdata", "i.csv")))
+		ctx, []byte("default"), []byte(filepath.Join("testdata", "i.csv")))
 	qp.Send(ctx, query)
 	select {
 	case <-ctx.Done():

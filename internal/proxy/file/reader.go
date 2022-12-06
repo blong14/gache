@@ -55,35 +55,11 @@ func (f *Reader) ReadCSV(ctx context.Context, query *gdb.Query) {
 	defer reader.Close()
 	reader.Init()
 	for reader.Scan() {
-		q, done := gdb.NewBatchSetValueQuery(ctx, query.Header.TableName, reader.Rows())
-		f.waiter.Add(done)
-		f.pool.Send(ctx, q)
-	}
-	f.waiter.Wait(ctx)
-	success := false
-	if err := reader.Err(); err == nil {
-		success = true
-	}
-	query.Done(
-		gdb.QueryResponse{
-			Success: success,
-			Value:   []byte("done"),
-		},
-	)
-}
-
-func (f *Reader) ReadDAT(ctx context.Context, query *gdb.Query) {
-	if query.Header.Inst != gdb.Load {
-		if query != nil {
-			query.Done(gdb.QueryResponse{Success: false})
+		var rows []gdb.KeyValue
+		for _, r := range reader.Rows() {
+			rows = append(rows, gdb.KeyValue{Key: r.Key, Value: r.Value})
 		}
-		return
-	}
-	reader := gfile.ScanDat(string(query.Header.FileName))
-	defer reader.Close()
-	reader.Init()
-	for reader.Scan() {
-		q, done := gdb.NewBatchSetValueQuery(ctx, query.Header.TableName, reader.Rows())
+		q, done := gdb.NewBatchSetValueQuery(ctx, query.Header.TableName, rows)
 		f.waiter.Add(done)
 		f.pool.Send(ctx, q)
 	}

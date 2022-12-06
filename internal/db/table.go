@@ -1,105 +1,125 @@
 package db
 
 import (
-	"hash/maphash"
+	gfile "github.com/blong14/gache/internal/io/file"
 	"os"
+	"sync"
 
-	garena "github.com/blong14/gache/internal/db/arena"
-	gskl "github.com/blong14/gache/internal/db/skiplist"
+	gmtable "github.com/blong14/gache/internal/db/memtable"
+	gstable "github.com/blong14/gache/internal/db/sstable"
 )
 
-var seed = maphash.MakeSeed()
-
-func Hash(key []byte) uint64 {
-	var h maphash.Hash
-	h.SetSeed(seed)
-	_, _ = h.Write(key)
-	return h.Sum64()
-}
-
-type Table[K, V any] interface {
-	Get(k K) (V, bool)
+type Table interface {
+	Get(k []byte) ([]byte, bool)
+	Set(k, v []byte) error
+	Range(func(k, v []byte) bool)
 	Print()
-	Range(func(k K, v V) bool)
-	Remove(k K) (V, bool)
-	Set(k K, v V)
+	Close()
 }
 
 type TableOpts struct {
 	TableName []byte
+	DataDir   []byte
+	InMemory  bool
 }
 
-type TableCache struct {
+type fileDatabase struct {
+	dir      string
 	name     string
-	index    *gskl.SkipList
-	memtable garena.Arena
+	memtable *gmtable.MemTable
+	sstable  *gstable.SSTable
 	handle   *os.File
 }
 
-func New() *TableCache {
-	return &TableCache{
-		index: gskl.New(),
-	}
-}
-
-func XNew(name string) *TableCache {
-	return &TableCache{
-		name:  name,
-		index: gskl.New(),
-	}
-}
-
-func (db *TableCache) Open() {
-	length := 4096 * 4096 * 4
-	f, err := os.OpenFile(db.name, os.O_CREATE|os.O_RDWR, 0755)
-	if err != nil {
-		panic(err)
-	}
-
-	s, err := f.Stat()
-	if err != nil {
-		panic(err)
-	}
-	size := s.Size()
-	if size == 0 {
-		_, err = f.Write(make([]byte, length))
-		if err != nil {
-			panic(err)
+// New creates a new Table
+//
+// opts *TableOpts allow for specific database
+// configuration.
+//
+// Example:
+// opts := &TableOpts{TableName: "foo", DataDir: "bar", InMemory: True}
+// db := New(opts)
+// defer db.Close()
+// err := db.Set(k, v)
+// if err != nil {
+//    panic(err)
+// }
+// v, ok := db.Get(k)
+func New(opts *TableOpts) Table {
+	if opts.InMemory {
+		return &inMemoryDatabase{
+			name:     string(opts.TableName),
+			memtable: gmtable.New(),
 		}
 	}
-
-	db.memtable = garena.NewGoArena(f, uint64(length))
-	db.handle = f
-}
-
-func (db *TableCache) Get(k []byte) ([]byte, bool) {
-	return db.index.Get(Hash(k))
-}
-
-func (db *TableCache) Print() {
-	db.index.Print()
-}
-
-func (db *TableCache) Range(f func(k uint64, v []byte) bool) {
-	db.index.Range(f)
-}
-
-func (db *TableCache) Remove(k []byte) ([]byte, bool) {
-	return db.index.Remove(Hash(k))
-}
-
-func (db *TableCache) Set(k, v []byte) {
-	db.index.Set(Hash(k), v)
-}
-
-func (db *TableCache) XSet(k, v []byte) {
-	if _, err := db.memtable.XWrite(k, v); err != nil {
-		db.index.Set(Hash(k), v)
+	db := &fileDatabase{
+		dir:      string(opts.DataDir),
+		name:     string(opts.TableName),
+		memtable: gmtable.New(),
 	}
+	f, err := gfile.NewDatFile(string(opts.DataDir), string(opts.TableName))
+	if err != nil {
+		panic(err)
+	}
+	if err := db.Open(f); err != nil {
+		panic(err)
+	}
+	return db
 }
 
-func (db *TableCache) Close() {
-	if db.memtable != nil {
-		db.memtable.Free()
-	}
+var once sync.Once
+
+func (db *fileDatabase) Open(f *os.File) error {
+	once.Do(func() {
+		db.handle = f
+		db.sstable = gstable.New(f)
+	})
+	return nil
 }
+
+func (db *fileDatabase) Get(k []byte) ([]byte, bool) {
+	value, ok := db.memtable.Get(k)
+	if ok {
+		return value, true
+	}
+	return db.sstable.Get(k)
+}
+
+func (db *fileDatabase) Set(k, v []byte) error {
+	if err := db.memtable.Set(k, v); err != nil {
+		return err
+	}
+	err := db.memtable.Flush(db.sstable)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (db *fileDatabase) Close() {
+	if db.sstable != nil {
+		db.sstable.Free()
+	}
+	db.handle = nil
+}
+
+func (db *fileDatabase) Print()                           {}
+func (db *fileDatabase) Range(fnc func(k, v []byte) bool) {}
+
+type inMemoryDatabase struct {
+	name     string
+	memtable *gmtable.MemTable
+}
+
+func (db *inMemoryDatabase) Get(k []byte) ([]byte, bool) {
+	value, ok := db.memtable.Get(k)
+	return value, ok
+}
+
+func (db *inMemoryDatabase) Set(k, v []byte) error {
+	return db.memtable.Set(k, v)
+}
+
+func (db *inMemoryDatabase) Close()                           {}
+func (db *inMemoryDatabase) Print()                           {}
+func (db *inMemoryDatabase) Range(fnc func(k, v []byte) bool) {}

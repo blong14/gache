@@ -4,7 +4,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	gdb "github.com/blong14/gache/internal/db"
 	gfile "github.com/blong14/gache/internal/io/file"
 )
 
@@ -24,7 +23,7 @@ func TestReadCSV(t *testing.T) {
 
 func BenchmarkScanCSV(b *testing.B) {
 	b.ReportAllocs()
-	out := make([]gdb.KeyValue, 0)
+	out := make([]gfile.KeyValue, 0)
 	for i := 0; i < b.N; i++ {
 		reader := gfile.ScanCSV(filepath.Join("testdata", "i.csv"))
 		reader.Init()
