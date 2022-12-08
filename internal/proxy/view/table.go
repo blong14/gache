@@ -63,7 +63,7 @@ func (va *Table) Execute(ctx context.Context, query *gdb.Query) {
 		var errs *gerrors.Error
 		for _, kv := range query.Values {
 			if kv.Valid() {
-				errs = gerrors.Append(errs, va.impl.Set(query.Key, kv.Value))
+				errs = gerrors.Append(errs, va.impl.Set(kv.Key, kv.Value))
 			}
 		}
 		if errs.ErrorOrNil() != nil {
