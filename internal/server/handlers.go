@@ -8,7 +8,7 @@ import (
 	"log"
 	"net/http"
 
-	gactors "github.com/blong14/gache/internal/actors"
+	gdb "github.com/blong14/gache/internal/db"
 	ghttp "github.com/blong14/gache/internal/io/http"
 )
 
@@ -43,7 +43,7 @@ func getValueService(db *sql.DB) http.HandlerFunc {
 		}
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
-		var result *gactors.QueryResponse
+		var result *gdb.QueryResponse
 		err := db.QueryRowContext(
 			ctx,
 			"select value from :table where key = :key",
@@ -99,7 +99,7 @@ func setValueService(db *sql.DB) http.HandlerFunc {
 		}
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
-		var result *gactors.QueryResponse
+		var result *gdb.QueryResponse
 		err := db.QueryRowContext(
 			ctx,
 			"insert into :table set key = :key, value = :value",

@@ -7,23 +7,23 @@ import (
 	"io"
 	"strings"
 
-	gactors "github.com/blong14/gache/internal/actors"
+	gdb "github.com/blong14/gache/internal/db"
 )
 
 type parseContext struct {
 	scanner    *bufio.Scanner
-	query      *gactors.Query
+	query      *gdb.Query
 	tkn        string
-	evaluators map[string]func(s *bufio.Scanner, q *gactors.Query) error
+	evaluators map[string]func(s *bufio.Scanner, q *gdb.Query) error
 }
 
-func newParseContext(scanner *bufio.Scanner, query *gactors.Query) *parseContext {
+func newParseContext(scanner *bufio.Scanner, query *gdb.Query) *parseContext {
 	return &parseContext{
 		scanner: scanner,
 		query:   query,
-		evaluators: map[string]func(s *bufio.Scanner, q *gactors.Query) error{
-			"copy": func(scanner *bufio.Scanner, query *gactors.Query) error {
-				query.Header.Inst = gactors.Load
+		evaluators: map[string]func(s *bufio.Scanner, q *gdb.Query) error{
+			"copy": func(scanner *bufio.Scanner, query *gdb.Query) error {
+				query.Header.Inst = gdb.Load
 				for scanner.Scan() {
 					switch scanner.Text() {
 					case "from":
@@ -43,11 +43,11 @@ func newParseContext(scanner *bufio.Scanner, query *gactors.Query) *parseContext
 				}
 				return nil
 			},
-			"create": func(scanner *bufio.Scanner, query *gactors.Query) error {
-				query.Header.Inst = gactors.AddTable
+			"create": func(scanner *bufio.Scanner, query *gdb.Query) error {
+				query.Header.Inst = gdb.AddTable
 				return nil
 			},
-			"from": func(scanner *bufio.Scanner, query *gactors.Query) error {
+			"from": func(scanner *bufio.Scanner, query *gdb.Query) error {
 				if scanner.Scan() {
 					table := strings.TrimSpace(scanner.Text())
 					if strings.HasSuffix(table, ";") {
@@ -58,11 +58,11 @@ func newParseContext(scanner *bufio.Scanner, query *gactors.Query) *parseContext
 				}
 				return nil
 			},
-			"insert": func(scanner *bufio.Scanner, query *gactors.Query) error {
-				query.Header.Inst = gactors.SetValue
+			"insert": func(scanner *bufio.Scanner, query *gdb.Query) error {
+				query.Header.Inst = gdb.SetValue
 				return nil
 			},
-			"key": func(scanner *bufio.Scanner, query *gactors.Query) error {
+			"key": func(scanner *bufio.Scanner, query *gdb.Query) error {
 				for scanner.Scan() {
 					switch scanner.Text() {
 					case "=":
@@ -79,14 +79,14 @@ func newParseContext(scanner *bufio.Scanner, query *gactors.Query) *parseContext
 				}
 				return nil
 			},
-			"select": func(scanner *bufio.Scanner, query *gactors.Query) error {
-				query.Header.Inst = gactors.GetValue
+			"select": func(scanner *bufio.Scanner, query *gdb.Query) error {
+				query.Header.Inst = gdb.GetValue
 				if !scanner.Scan() {
 					return errors.New("missing token")
 				}
 				return nil
 			},
-			"into": func(scanner *bufio.Scanner, query *gactors.Query) error {
+			"into": func(scanner *bufio.Scanner, query *gdb.Query) error {
 				if scanner.Scan() {
 					table := strings.TrimSpace(scanner.Text())
 					if strings.HasSuffix(table, ";") {
@@ -98,7 +98,7 @@ func newParseContext(scanner *bufio.Scanner, query *gactors.Query) *parseContext
 				}
 				return errors.New("missing table")
 			},
-			"table": func(scanner *bufio.Scanner, query *gactors.Query) error {
+			"table": func(scanner *bufio.Scanner, query *gdb.Query) error {
 				if scanner.Scan() {
 					table := strings.TrimSpace(scanner.Text())
 					if strings.HasSuffix(table, ";") {
@@ -108,7 +108,7 @@ func newParseContext(scanner *bufio.Scanner, query *gactors.Query) *parseContext
 				}
 				return errors.New("missing table")
 			},
-			"value": func(scanner *bufio.Scanner, query *gactors.Query) error {
+			"value": func(scanner *bufio.Scanner, query *gdb.Query) error {
 				for scanner.Scan() {
 					switch scanner.Text() {
 					case "=":
@@ -140,10 +140,10 @@ func (p *parseContext) Evaluate() error {
 	return nil
 }
 
-func parse(src io.Reader) (*gactors.Query, error) {
+func parse(src io.Reader) (*gdb.Query, error) {
 	scanner := bufio.NewScanner(src)
 	scanner.Split(bufio.ScanWords)
-	query := gactors.NewQuery(context.Background(), nil)
+	query := gdb.NewQuery(context.Background(), nil)
 	ctx := newParseContext(scanner, query)
 	for scanner.Scan() {
 		ctx.SetToken(scanner.Text())

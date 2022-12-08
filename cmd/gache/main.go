@@ -9,18 +9,14 @@ import (
 	"syscall"
 	"time"
 
-	gache "github.com/blong14/gache/database"
+	genv "github.com/blong14/gache/internal/environ"
 	ghttp "github.com/blong14/gache/internal/io/http"
 	grpc "github.com/blong14/gache/internal/io/rpc"
 	ghandlers "github.com/blong14/gache/internal/server"
 )
 
 func mustGetDB() *sql.DB {
-	dsn, ok := os.LookupEnv("dsn")
-	if !ok {
-		dsn = gache.MEMORY
-	}
-	db, err := sql.Open("gache", dsn)
+	db, err := sql.Open("gache", genv.DSN())
 	if err != nil {
 		panic(err)
 	}

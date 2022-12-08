@@ -6,7 +6,7 @@ import (
 	"errors"
 	"net/rpc"
 
-	"github.com/blong14/gache/internal/actors"
+	gdb "github.com/blong14/gache/internal/db"
 )
 
 type GacheClient interface {
@@ -28,7 +28,7 @@ func New(c *rpc.Client, db *sql.DB) GacheClient {
 }
 
 func (c *client) Get(ctx context.Context, table, key []byte) ([]byte, error) {
-	var result *actors.QueryResponse
+	var result *gdb.QueryResponse
 	err := c.database.QueryRowContext(
 		ctx,
 		"select value from :table where key = :key",
@@ -45,7 +45,7 @@ func (c *client) Get(ctx context.Context, table, key []byte) ([]byte, error) {
 }
 
 func (c *client) Set(ctx context.Context, table, key, value []byte) error {
-	var result *actors.QueryResponse
+	var result *gdb.QueryResponse
 	err := c.database.QueryRowContext(
 		ctx,
 		"insert into :table set key = :key, value = :value",

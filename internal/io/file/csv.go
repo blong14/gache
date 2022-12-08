@@ -7,13 +7,17 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/blong14/gache/internal/actors"
 	gerrors "github.com/blong14/gache/internal/errors"
 )
 
+type KeyValue struct {
+	Key   []byte
+	Value []byte
+}
+
 type Reader struct {
 	max       int
-	token     []actors.KeyValue
+	token     []KeyValue
 	errs      *gerrors.Error
 	data      string
 	handle    *os.File
@@ -28,14 +32,14 @@ func (s *Reader) Init() {
 	s.handle = f
 	s.csvReader = csv.NewReader(s.handle)
 	s.csvReader.ReuseRecord = true
-	s.token = make([]actors.KeyValue, s.max)
+	s.token = make([]KeyValue, s.max)
 }
 
 func (s *Reader) Err() *gerrors.Error {
 	return s.errs
 }
 
-func (s *Reader) Rows() []actors.KeyValue {
+func (s *Reader) Rows() []KeyValue {
 	return s.token
 }
 
@@ -49,7 +53,7 @@ func (s *Reader) Scan() bool {
 	if err := s.errs.ErrorOrNil(); err != nil {
 		return false
 	}
-	out := make([]actors.KeyValue, 0)
+	out := make([]KeyValue, 0)
 	for {
 		row, err := s.csvReader.Read()
 		if err == io.EOF {
@@ -59,7 +63,7 @@ func (s *Reader) Scan() bool {
 			s.errs = gerrors.Append(s.errs, err)
 			break
 		}
-		out = append(out, actors.KeyValue{
+		out = append(out, KeyValue{
 			Key:   []byte(row[0]),
 			Value: []byte(row[1]),
 		})

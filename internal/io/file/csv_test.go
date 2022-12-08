@@ -1,7 +1,6 @@
 package file_test
 
 import (
-	"github.com/blong14/gache/internal/actors"
 	"path/filepath"
 	"testing"
 
@@ -24,7 +23,7 @@ func TestReadCSV(t *testing.T) {
 
 func BenchmarkScanCSV(b *testing.B) {
 	b.ReportAllocs()
-	out := make([]actors.KeyValue, 0)
+	out := make([]gfile.KeyValue, 0)
 	for i := 0; i < b.N; i++ {
 		reader := gfile.ScanCSV(filepath.Join("testdata", "i.csv"))
 		reader.Init()
