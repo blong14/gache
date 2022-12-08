@@ -35,6 +35,23 @@ func Hash(key []byte) uint64 {
 	return h.Sum64()
 }
 
+func unlock(highestLocked int, preds []*MapEntry) {
+	if highestLocked < 0 {
+		return
+	}
+	for _, m := range preds {
+		if m == nil {
+			continue
+		}
+		if m.lock != nil {
+			select {
+			case <-m.lock:
+			default:
+			}
+		}
+	}
+}
+
 type MapEntry struct {
 	key         uint64
 	topLayer    uint8
@@ -96,16 +113,6 @@ iloop:
 	return -1
 }
 
-func (sl *SkipList) GetByHash(key uint64) ([]byte, bool) {
-	preds := make([]*MapEntry, MaxHeight)
-	succs := make([]*MapEntry, MaxHeight)
-	lFound := sl.skipSearch(key, preds, succs)
-	if lFound != -1 && succs[lFound].fullyLinked && !succs[lFound].marked {
-		return succs[lFound].value, true
-	}
-	return nil, false
-}
-
 func (sl *SkipList) Get(key []byte) ([]byte, bool) {
 	preds := make([]*MapEntry, MaxHeight)
 	succs := make([]*MapEntry, MaxHeight)
@@ -114,95 +121,6 @@ func (sl *SkipList) Get(key []byte) ([]byte, bool) {
 		return succs[lFound].value, true
 	}
 	return nil, false
-}
-
-func unlock(highestLocked int, preds []*MapEntry) {
-	if highestLocked < 0 {
-		return
-	}
-	for _, m := range preds {
-		if m == nil {
-			continue
-		}
-		if m.lock != nil {
-			select {
-			case <-m.lock:
-			default:
-			}
-		}
-	}
-}
-
-func (sl *SkipList) SetByHash(key uint64, value []byte) {
-	var p PRNG
-	p.Seed(uint64(time.Now().UnixNano()))
-	var (
-		valid    bool
-		topLayer = p.Next()
-		pred     *MapEntry
-		succ     *MapEntry
-		prevPred *MapEntry
-	)
-loop:
-	for {
-		valid = true
-		highestLocked := -1
-		locks := make([]*MapEntry, MaxHeight)
-		preds := make([]*MapEntry, MaxHeight)
-		succs := make([]*MapEntry, MaxHeight)
-		lFound := sl.skipSearch(key, preds, succs)
-		if lFound != -1 {
-			nodeFound := succs[lFound]
-			if nodeFound != nil && !nodeFound.marked {
-				// item already in the list return early
-				unlock(highestLocked, locks)
-				return
-			}
-			continue
-		}
-		height := atomic.LoadUint64(&sl.H)
-		for layer := uint64(0); valid && (layer <= height); layer++ {
-			pred = preds[layer]
-			succ = succs[layer]
-			if pred != prevPred {
-				select {
-				case pred.lock <- struct{}{}:
-					prevPred = pred
-					highestLocked = int(layer)
-					locks[layer] = pred
-				default:
-					unlock(highestLocked, locks)
-					continue loop
-				}
-			}
-			if succ != nil {
-				valid = !pred.marked && !succ.marked && pred.nexts[layer] == succ
-			}
-		}
-		if !valid {
-			// validation failed; try again
-			// validation = for each layer, i <= topNodeLayer, preds[i], succs[i]
-			// are still adjacent at layer i and that neither is marked
-			unlock(highestLocked, locks)
-			continue
-		}
-		// at this point; this thread holds all locks
-		// safe to create a new node
-		newNode := NewMapEntry(key, value)
-		newNode.topLayer = uint8(topLayer)
-		for layer := uint64(0); layer <= topLayer; layer++ {
-			newNode.nexts[layer] = succs[layer]
-			preds[layer].nexts[layer] = newNode
-		}
-		newNode.fullyLinked = true
-		atomic.AddUint64(&sl.count, 1)
-		height = atomic.LoadUint64(&sl.H)
-		if topLayer > height {
-			atomic.StoreUint64(&sl.H, topLayer)
-		}
-		unlock(highestLocked, locks)
-		return
-	}
 }
 
 func (sl *SkipList) Set(key, value []byte) error {
@@ -232,7 +150,7 @@ loop:
 			}
 			continue
 		}
-		height := atomic.LoadUint64(&sl.H)
+		height := sl.Height()
 		for layer := uint64(0); valid && (layer <= height); layer++ {
 			pred = preds[layer]
 			succ = succs[layer]
@@ -268,8 +186,9 @@ loop:
 			preds[layer].nexts[layer] = newNode
 		}
 		newNode.fullyLinked = true
-		atomic.AddUint64(&sl.count, 1)
-		height = atomic.LoadUint64(&sl.H)
+		count := atomic.AddUint64(&sl.count, 1)
+		atomic.StoreUint64(&sl.count, count)
+		height = sl.Height()
 		if topLayer > height {
 			atomic.StoreUint64(&sl.H, topLayer)
 		}
@@ -307,4 +226,12 @@ func (sl *SkipList) Range(f func(k, v []byte) bool) {
 			break
 		}
 	}
+}
+
+func (sl *SkipList) Count() uint64 {
+	return atomic.LoadUint64(&sl.count)
+}
+
+func (sl *SkipList) Height() uint64 {
+	return atomic.LoadUint64(&sl.H)
 }
