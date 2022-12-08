@@ -1,12 +1,15 @@
 package db
 
 import (
-	gfile "github.com/blong14/gache/internal/io/file"
+	"context"
+	"fmt"
+	"log"
 	"os"
 	"sync"
 
 	gmtable "github.com/blong14/gache/internal/db/memtable"
 	gstable "github.com/blong14/gache/internal/db/sstable"
+	gfile "github.com/blong14/gache/internal/io/file"
 )
 
 type Table interface {
@@ -14,6 +17,7 @@ type Table interface {
 	Set(k, v []byte) error
 	Range(func(k, v []byte) bool)
 	Print()
+	Connect() error
 	Close()
 }
 
@@ -29,6 +33,7 @@ type fileDatabase struct {
 	memtable *gmtable.MemTable
 	sstable  *gstable.SSTable
 	handle   *os.File
+	onSet    chan struct{}
 }
 
 // New creates a new Table
@@ -52,16 +57,18 @@ func New(opts *TableOpts) Table {
 			memtable: gmtable.New(),
 		}
 	}
-	db := &fileDatabase{
-		dir:      string(opts.DataDir),
-		name:     string(opts.TableName),
-		memtable: gmtable.New(),
-	}
 	f, err := gfile.NewDatFile(string(opts.DataDir), string(opts.TableName))
 	if err != nil {
 		panic(err)
 	}
-	if err := db.Open(f); err != nil {
+	db := &fileDatabase{
+		dir:      string(opts.DataDir),
+		name:     string(opts.TableName),
+		memtable: gmtable.New(),
+		handle:   f,
+		onSet:    make(chan struct{}),
+	}
+	if err := db.Connect(); err != nil {
 		panic(err)
 	}
 	return db
@@ -69,10 +76,11 @@ func New(opts *TableOpts) Table {
 
 var once sync.Once
 
-func (db *fileDatabase) Open(f *os.File) error {
+func (db *fileDatabase) Connect() error {
 	once.Do(func() {
-		db.handle = f
-		db.sstable = gstable.New(f)
+		db.sstable = gstable.New(db.handle)
+		fmt.Println("starting flush thread")
+		go db.flush(context.TODO())
 	})
 	return nil
 }
@@ -89,11 +97,22 @@ func (db *fileDatabase) Set(k, v []byte) error {
 	if err := db.memtable.Set(k, v); err != nil {
 		return err
 	}
-	err := db.memtable.Flush(db.sstable)
-	if err != nil {
-		return err
-	}
+	db.onSet <- struct{}{}
 	return nil
+}
+
+func (db *fileDatabase) flush(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-db.onSet:
+			err := db.memtable.Flush(db.sstable)
+			if err != nil {
+				log.Println(err)
+			}
+		}
+	}
 }
 
 func (db *fileDatabase) Close() {
@@ -123,3 +142,4 @@ func (db *inMemoryDatabase) Set(k, v []byte) error {
 func (db *inMemoryDatabase) Close()                           {}
 func (db *inMemoryDatabase) Print()                           {}
 func (db *inMemoryDatabase) Range(fnc func(k, v []byte) bool) {}
+func (db *inMemoryDatabase) Connect() error                   { return nil }

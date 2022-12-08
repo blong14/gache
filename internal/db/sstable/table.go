@@ -14,17 +14,6 @@ type SSTable struct {
 	data  gmmap.Map
 }
 
-// New creates a new ready to use SSTable
-//
-// f := os.Open("file")
-// s := New(f)
-// err := s.Open()
-// if err != nil {
-//   panic(err)
-// }
-// defer s.Free()
-// s.SetByHash(k, v)
-// v, ok := s.GetByHash(k)
 func New(f *os.File) *SSTable {
 	mmap, err := gmmap.NewMap(
 		f,
@@ -64,7 +53,7 @@ func (ss *SSTable) Get(k []byte) ([]byte, bool) {
 	if len(values) != 2 {
 		return nil, false
 	}
-	value := bytes.TrimSuffix(values[1], []byte(";"))
+	value := bytes.TrimSuffix(values[1], []byte(";\n"))
 	return value, true
 }
 
@@ -72,7 +61,7 @@ func (ss *SSTable) Set(k, v []byte) error {
 	buf := bytes.NewBuffer(k)
 	buf.Write([]byte("::"))
 	buf.Write(v)
-	buf.Write([]byte(";"))
+	buf.Write([]byte(";\n"))
 	len_, offset, err := ss.data.Append(buf.Bytes())
 	if err != nil {
 		return err

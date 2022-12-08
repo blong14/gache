@@ -1,10 +1,11 @@
 package memtable
 
 import (
-	gstable "github.com/blong14/gache/internal/db/sstable"
-	gskl "github.com/blong14/gache/internal/map/skiplist"
 	"sync/atomic"
 	"unsafe"
+
+	gstable "github.com/blong14/gache/internal/db/sstable"
+	gskl "github.com/blong14/gache/internal/map/skiplist"
 )
 
 type MemTable struct {
@@ -28,19 +29,23 @@ func (m *MemTable) Set(k, v []byte) error {
 }
 
 func (m *MemTable) Flush(sstable *gstable.SSTable) error {
-	nReader := gskl.New()
-	for {
+	if m.readBuffer.Count() > 4096 {
 		reader := (*gskl.SkipList)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&m.readBuffer))))
-		if atomic.CompareAndSwapPointer(
-			(*unsafe.Pointer)(unsafe.Pointer(&m.readBuffer)),
-			unsafe.Pointer(reader),
-			unsafe.Pointer(nReader),
-		) {
-			reader.Range(func(k, v []byte) bool {
-				err := sstable.Set(k, v)
-				return err == nil
-			})
-			return nil
+		nReader := gskl.New()
+		for {
+			reader = (*gskl.SkipList)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&m.readBuffer))))
+			if atomic.CompareAndSwapPointer(
+				(*unsafe.Pointer)(unsafe.Pointer(&m.readBuffer)),
+				unsafe.Pointer(reader),
+				unsafe.Pointer(nReader),
+			) {
+				reader.Range(func(k, v []byte) bool {
+					err := sstable.Set(k, v)
+					return err == nil
+				})
+				return nil
+			}
 		}
 	}
+	return nil
 }
