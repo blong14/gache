@@ -18,22 +18,25 @@ func New() *MemTable {
 	}
 }
 
+func (m *MemTable) buffer() *gskl.SkipList {
+	reader := (*gskl.SkipList)(atomic.LoadPointer(
+		(*unsafe.Pointer)(unsafe.Pointer(&m.readBuffer))))
+	return reader
+}
+
 func (m *MemTable) Get(k []byte) ([]byte, bool) {
-	reader := (*gskl.SkipList)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&m.readBuffer))))
-	return reader.Get(k)
+	return m.buffer().Get(k)
 }
 
 func (m *MemTable) Set(k, v []byte) error {
-	writer := (*gskl.SkipList)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&m.readBuffer))))
-	return writer.Set(k, v)
+	return m.buffer().Set(k, v)
 }
 
 func (m *MemTable) Flush(sstable *gstable.SSTable) error {
-	if m.readBuffer.Count() > 4096 {
-		reader := (*gskl.SkipList)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&m.readBuffer))))
+	reader := m.buffer()
+	if reader.Count() > 4096 {
 		nReader := gskl.New()
 		for {
-			reader = (*gskl.SkipList)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&m.readBuffer))))
 			if atomic.CompareAndSwapPointer(
 				(*unsafe.Pointer)(unsafe.Pointer(&m.readBuffer)),
 				unsafe.Pointer(reader),
@@ -45,6 +48,7 @@ func (m *MemTable) Flush(sstable *gstable.SSTable) error {
 				})
 				return nil
 			}
+			reader = m.buffer()
 		}
 	}
 	return nil

@@ -231,6 +231,8 @@ func (m *mmap) Pos() int {
 }
 
 func (m *mmap) Lock() error {
+	m.RLock()
+	defer m.RUnlock()
 	return syscall.Mlock(m.data)
 }
 

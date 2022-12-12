@@ -57,8 +57,13 @@ func (ss *SSTable) Get(k []byte) ([]byte, bool) {
 	return value, true
 }
 
+var writePool = sync.Pool{New: func() any { return bytes.NewBuffer(nil) }}
+
 func (ss *SSTable) Set(k, v []byte) error {
-	buf := bytes.NewBuffer(k)
+	buf := writePool.Get().(*bytes.Buffer)
+	defer writePool.Put(buf)
+	buf.Reset()
+	buf.Write(k)
 	buf.Write([]byte("::"))
 	buf.Write(v)
 	buf.Write([]byte(";\n"))

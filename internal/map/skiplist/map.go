@@ -4,27 +4,15 @@ import (
 	"fmt"
 	"hash/maphash"
 	"sync/atomic"
-	"time"
+	_ "unsafe"
 )
 
+// XUint32n returns a lock free uint32 value in the interval [0, n).
+//
+//go:linkname XUint32n runtime.fastrandn
+func XUint32n(n uint32) uint32
+
 const MaxHeight uint8 = 20
-
-type PRNG struct {
-	seed uint64
-}
-
-func (p *PRNG) Seed(seed uint64) {
-	p.seed = seed
-}
-
-func (p *PRNG) Next() uint64 {
-	p.seed = p.seed + 1
-	a := p.seed * 15485863
-	// Will return in range 0 to 1 if seed >= 0 and -1 to 0 if seed < 0.
-	b := float64((a*a*a)%2038074743) / float64(2038074743)
-	c := float64(MaxHeight) * b
-	return uint64(c)
-}
 
 var seed = maphash.MakeSeed()
 
@@ -124,15 +112,16 @@ func (sl *SkipList) Get(key []byte) ([]byte, bool) {
 }
 
 func (sl *SkipList) Set(key, value []byte) error {
-	var p PRNG
-	p.Seed(uint64(time.Now().UnixNano()))
 	var (
 		valid    bool
-		topLayer = p.Next()
+		topLayer = XUint32n(uint32(MaxHeight))
 		pred     *MapEntry
 		succ     *MapEntry
 		prevPred *MapEntry
 	)
+	if topLayer == 0 {
+		topLayer = 1
+	}
 loop:
 	for {
 		valid = true
@@ -181,7 +170,7 @@ loop:
 		newNode := NewMapEntry(Hash(key), value)
 		newNode.topLayer = uint8(topLayer)
 		newNode.rawKey = key
-		for layer := uint64(0); layer <= topLayer; layer++ {
+		for layer := uint64(0); layer <= uint64(topLayer); layer++ {
 			newNode.nexts[layer] = succs[layer]
 			preds[layer].nexts[layer] = newNode
 		}
@@ -189,8 +178,8 @@ loop:
 		count := atomic.AddUint64(&sl.count, 1)
 		atomic.StoreUint64(&sl.count, count)
 		height = sl.Height()
-		if topLayer > height {
-			atomic.StoreUint64(&sl.H, topLayer)
+		if uint64(topLayer) > height {
+			atomic.StoreUint64(&sl.H, uint64(topLayer))
 		}
 		unlock(highestLocked, locks)
 		return nil
