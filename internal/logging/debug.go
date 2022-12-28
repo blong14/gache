@@ -3,6 +3,7 @@ package logging
 import (
 	"log"
 	"os"
+	"time"
 
 	genv "github.com/blong14/gache/internal/environ"
 )
@@ -24,4 +25,23 @@ func Track(format string, v ...any) {
 	if ShouldLog() {
 		log.Printf(format, v...)
 	}
+}
+
+func Trace(name string, t time.Time) time.Time {
+	if ShouldLog() {
+		if !t.IsZero() {
+			log.Printf("%s total: %s\n", name, time.Since(t))
+		} else {
+			log.Printf("tracing %s\n", name)
+		}
+	}
+	return time.Now()
+}
+
+func TraceStart(name string) func() time.Time {
+	start := Trace(name, time.Time{})
+	traceEnd := func() time.Time {
+		return Trace(name, start)
+	}
+	return traceEnd
 }

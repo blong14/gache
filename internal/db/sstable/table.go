@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	gmmap "github.com/blong14/gache/internal/db/sstable/arena"
+	gfile "github.com/blong14/gache/internal/io/file"
 )
 
 type SSTable struct {
@@ -15,12 +16,22 @@ type SSTable struct {
 }
 
 func New(f *os.File) *SSTable {
+	s, err := f.Stat()
+	if err != nil {
+		panic(err)
+	}
+	len_ := s.Size() + gfile.DataEndIndex
 	mmap, err := gmmap.NewMap(
 		f,
 		gmmap.Prot(gmmap.Read),
 		gmmap.Prot(gmmap.Write),
 		gmmap.Flag(gmmap.Shared),
+		gmmap.Length(int(len_)),
 	)
+	if err != nil {
+		panic(err)
+	}
+	_, err = mmap.Seek(gfile.DataStartIndex, 0)
 	if err != nil {
 		panic(err)
 	}
@@ -49,12 +60,15 @@ func (ss *SSTable) Get(k []byte) ([]byte, bool) {
 	if err != nil {
 		return nil, false
 	}
-	values := bytes.Split(kv, []byte("::"))
+	line, err := gfile.DecodeLine(string(kv))
+	if err != nil {
+		return nil, false
+	}
+	values := bytes.Split(line[1:len(line)-1], []byte("::"))
 	if len(values) != 2 {
 		return nil, false
 	}
-	value := bytes.TrimSuffix(values[1], []byte(";\n"))
-	return value, true
+	return values[1], true
 }
 
 var writePool = sync.Pool{New: func() any { return bytes.NewBuffer(nil) }}
@@ -66,8 +80,13 @@ func (ss *SSTable) Set(k, v []byte) error {
 	buf.Write(k)
 	buf.Write([]byte("::"))
 	buf.Write(v)
-	buf.Write([]byte(";\n"))
-	len_, offset, err := ss.data.Append(buf.Bytes())
+	encoded := make([]byte, buf.Len())
+	copy(encoded, buf.Bytes())
+	row, err := gfile.EncodeBlock(encoded)
+	if err != nil {
+		return err
+	}
+	len_, offset, err := ss.data.Append(row)
 	if err != nil {
 		return err
 	}

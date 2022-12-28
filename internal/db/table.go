@@ -1,8 +1,6 @@
 package db
 
 import (
-	"context"
-	"fmt"
 	"log"
 	"os"
 	"sync"
@@ -79,8 +77,6 @@ var once sync.Once
 func (db *fileDatabase) Connect() error {
 	once.Do(func() {
 		db.sstable = gstable.New(db.handle)
-		fmt.Println("starting flush thread")
-		go db.flush(context.TODO())
 	})
 	return nil
 }
@@ -97,25 +93,14 @@ func (db *fileDatabase) Set(k, v []byte) error {
 	if err := db.memtable.Set(k, v); err != nil {
 		return err
 	}
-	db.onSet <- struct{}{}
 	return nil
 }
 
-func (db *fileDatabase) flush(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-db.onSet:
-			err := db.memtable.Flush(db.sstable)
-			if err != nil {
-				log.Println(err)
-			}
-		}
-	}
-}
-
 func (db *fileDatabase) Close() {
+	err := db.memtable.Flush(db.sstable)
+	if err != nil {
+		log.Println(err)
+	}
 	if db.sstable != nil {
 		db.sstable.Free()
 	}

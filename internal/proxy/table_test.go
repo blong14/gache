@@ -64,9 +64,9 @@ func BenchmarkConcurrent_QueryProxy(b *testing.B) {
 					var query *gdb.Query
 					var done chan gdb.QueryResponse
 					if rng.Float32() < readFrac {
-						query, done = gdb.NewGetValueQuery(ctx, []byte("default."), []byte(key))
+						query, done = gdb.NewGetValueQuery(ctx, []byte("default"), []byte(key))
 					} else {
-						query, done = gdb.NewSetValueQuery(ctx, []byte("default."), []byte(key), []byte(key))
+						query, done = gdb.NewSetValueQuery(ctx, []byte("default"), []byte(key), []byte(key))
 					}
 					qp.Send(ctx, query)
 					select {
