@@ -1,13 +1,11 @@
 package skiplist
 
 import (
-	"bytes"
-	"errors"
 	"fmt"
 	"hash/maphash"
 	"strings"
-	"sync"
 	"sync/atomic"
+	"unsafe"
 	_ "unsafe"
 )
 
@@ -65,6 +63,10 @@ func newNode(k, v []byte) *node {
 	}
 }
 
+func (n *node) Next(layer uint64) *node {
+	return (*node)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&n.nexts[layer]))))
+}
+
 type SkipList struct {
 	Sentinal  *node
 	MaxHeight uint8
@@ -86,14 +88,14 @@ func (sl *SkipList) search(key uint64, preds, succs []*node) int {
 	pred := sl.Sentinal
 	layer := int(sl.MaxHeight - 1)
 oloop:
-	curr = pred.nexts[layer]
+	curr = pred.Next(uint64(layer))
 iloop:
 	// d := -1
 	if curr != nil {
 		// d = bytes.Compare(key, curr.rawKey)
 		if key > curr.hash {
 			pred = curr
-			curr = pred.nexts[layer]
+			curr = pred.Next(uint64(layer))
 			goto iloop
 		}
 	}
@@ -120,85 +122,6 @@ func (sl *SkipList) Get(key []byte) ([]byte, bool) {
 	return nil, false
 }
 
-type nodePool struct {
-	mtx    sync.RWMutex
-	slab   [][]*node
-	row    int64
-	column int64
-}
-
-func (np *nodePool) Column() int64 {
-	np.mtx.RLock()
-	defer np.mtx.RUnlock()
-	return np.column
-}
-
-func (np *nodePool) Row() int64 {
-	np.mtx.RLock()
-	defer np.mtx.RUnlock()
-	return np.row
-}
-
-func (np *nodePool) getNode() *node {
-	np.mtx.RLock()
-	defer np.mtx.RUnlock()
-	return np.slab[np.row][np.column]
-}
-
-func (np *nodePool) Get() *node {
-	if np.Column() < 0 {
-		row := make([]*node, len(np.slab[np.Row()])*2)
-		i := 0
-		n := len(row) / 8
-		for n > 0 {
-			row[i] = new(node)
-			i++
-			row[i] = new(node)
-			i++
-			row[i] = new(node)
-			i++
-			row[i] = new(node)
-			i++
-			row[i] = new(node)
-			i++
-			row[i] = new(node)
-			i++
-			row[i] = new(node)
-			i++
-			row[i] = new(node)
-			i++
-			n--
-		}
-		np.mtx.Lock()
-		np.slab = append(np.slab, row)
-		np.row++
-		np.column = int64(len(row) - 1)
-		np.mtx.Unlock()
-	}
-	n := np.getNode()
-	np.mtx.Lock()
-	np.column = np.column - 1
-	np.mtx.Unlock()
-	return n
-	// return newNode(nil, nil)
-}
-
-func newNodePool() *nodePool {
-	row := make([]*node, 2048)
-	for i := range row {
-		row[i] = new(node)
-	}
-	slab := [][]*node{row}
-	return &nodePool{
-		mtx:    sync.RWMutex{},
-		slab:   slab,
-		row:    0,
-		column: int64(len(row) - 1),
-	}
-}
-
-var pool = newNodePool()
-
 func (sl *SkipList) Set(key, value []byte) error {
 	var (
 		valid    bool
@@ -222,13 +145,9 @@ loop:
 		if lFound != -1 {
 			nodeFound := succs[lFound]
 			if nodeFound != nil && !nodeFound.marked {
-				if d := bytes.Compare(key, nodeFound.rawKey); d == 0 {
-					fmt.Println("dup")
-				}
 				// item already in the list return early
-				return errors.New("dup")
+				return nil
 			}
-			fmt.Println("&&&&&")
 			continue
 		}
 		height := sl.Height()
@@ -242,27 +161,24 @@ loop:
 					highestLocked = int(layer)
 					prevPred = pred
 				default:
-					fmt.Println("----", highestLocked, k, string(key))
 					unlock(highestLocked, locks)
 					continue loop
 				}
 			}
 			if succ != nil {
-				valid = !pred.marked && !succ.marked && pred.nexts[layer] == succ
+				valid = !pred.marked && !succ.marked && pred.Next(layer) == succ
 			}
 		}
 		if !valid {
 			// validation failed; try again
 			// validation = for each layer, i <= topNodeLayer, preds[i], succs[i]
 			// are still adjacent at layer i and that neither is marked
-			fmt.Println("*****")
 			unlock(highestLocked, locks)
 			continue
 		}
 		// at this point; this thread holds all locks
 		// safe to create a new node
-		node := pool.Get()
-		// node := &node{}
+		node := &node{}
 		node.lock = make(chan struct{}, 1)
 		node.rawKey = key
 		node.hash = k
@@ -270,7 +186,13 @@ loop:
 		node.topLayer = uint8(topLayer)
 		for layer := uint64(0); layer <= uint64(topLayer); layer++ {
 			node.nexts[layer] = succs[layer]
-			preds[layer].nexts[layer] = node
+			pred := preds[layer]
+			n := pred.Next(layer)
+			atomic.CompareAndSwapPointer(
+				(*unsafe.Pointer)(unsafe.Pointer(&pred.nexts[layer])),
+				unsafe.Pointer(n),
+				unsafe.Pointer(node),
+			)
 		}
 		node.fullyLinked = true
 		atomic.AddUint64(&sl.count, 1)

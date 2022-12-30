@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
-	"time"
 
 	gdb "github.com/blong14/gache/internal/db"
 	glog "github.com/blong14/gache/internal/logging"
@@ -36,12 +35,8 @@ func (s *Worker) Start(ctx context.Context) {
 			if !ok {
 				return
 			}
-			start := time.Now()
+			glog.Track("%T::%s executing %s %s", s.pool, s.id, query.Header.Inst, query.Key)
 			s.pool.Execute(ctx, query)
-			glog.Track(
-				"%T::%s executed %s values=%d in %s",
-				s.pool, s.id, query.Header.Inst, len(query.Values), time.Since(start),
-			)
 		}
 	}
 }

@@ -2,10 +2,10 @@ package proxy_test
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math/rand"
 	"path/filepath"
-	"strconv"
 	"testing"
 	"time"
 
@@ -53,20 +53,22 @@ func BenchmarkConcurrent_QueryProxy(b *testing.B) {
 		}
 		gproxy.StartProxy(ctx, qp)
 
-		b.Run(fmt.Sprintf("skiplist_%v", readFrac), func(b *testing.B) {
+		b.Run(fmt.Sprintf("skiplist_%v", i*10), func(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
+			table := []byte("default")
+			value := []byte{'v'}
 			var hits, misses int
 			b.RunParallel(func(pb *testing.PB) {
 				rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+				buf := make([]byte, 8)
 				for pb.Next() {
-					key := strconv.Itoa(rng.Intn(100))
 					var query *gdb.Query
 					var done chan gdb.QueryResponse
 					if rng.Float32() < readFrac {
-						query, done = gdb.NewGetValueQuery(ctx, []byte("default"), []byte(key))
+						query, done = gdb.NewGetValueQuery(ctx, table, randomKey(rng, buf))
 					} else {
-						query, done = gdb.NewSetValueQuery(ctx, []byte("default"), []byte(key), []byte(key))
+						query, done = gdb.NewSetValueQuery(ctx, table, randomKey(rng, buf), value)
 					}
 					qp.Send(ctx, query)
 					select {
@@ -87,4 +89,12 @@ func BenchmarkConcurrent_QueryProxy(b *testing.B) {
 		gproxy.StopProxy(ctx, qp)
 		cancel()
 	}
+}
+
+func randomKey(rng *rand.Rand, b []byte) []byte {
+	key := rng.Uint32()
+	key2 := rng.Uint32()
+	binary.LittleEndian.PutUint32(b, key)
+	binary.LittleEndian.PutUint32(b[4:], key2)
+	return b
 }

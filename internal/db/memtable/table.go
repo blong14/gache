@@ -6,7 +6,7 @@ import (
 
 	gstable "github.com/blong14/gache/internal/db/sstable"
 	glog "github.com/blong14/gache/internal/logging"
-	gskl "github.com/blong14/gache/internal/map/skiplist"
+	gskl "github.com/blong14/gache/internal/map/xskiplist"
 )
 
 type MemTable struct {

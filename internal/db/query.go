@@ -85,7 +85,6 @@ func (m *Query) Done(r QueryResponse) {
 	case m.done <- r:
 	}
 	close(m.done)
-	m.done = nil
 }
 
 func (m *Query) Context() context.Context {
