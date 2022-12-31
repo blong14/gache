@@ -220,8 +220,9 @@ func (m *mmap) Seek(offset int64, whence int) (int64, error) {
 			return int64(m.ptr), nil
 		}
 		return 0, errors.New("offset would set the offset as a negative number")
+	default:
+		return 0, errors.New("whence arg was not set to a valid value")
 	}
-	return 0, errors.New("whence arg was not set to a valid value")
 }
 
 func (m *mmap) Pos() int {

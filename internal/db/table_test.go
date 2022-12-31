@@ -1,39 +1,46 @@
 package db_test
 
 import (
-	"bytes"
+	"fmt"
 	"testing"
+	"time"
 
 	gdb "github.com/blong14/gache/internal/db"
+	glog "github.com/blong14/gache/internal/logging"
 )
 
-func TestReader_ViewGet(t *testing.T) {
-	key := []byte("name")
-	expected := []byte("__value__")
+func TestGetAndSet(t *testing.T) {
 	opts := &gdb.TableOpts{
 		DataDir:   []byte("testdata"),
 		TableName: []byte("default"),
-		InMemory:  false,
+		InMemory:  true,
 	}
-
 	db := gdb.New(opts)
-	defer db.Close()
 
 	// given
-	err := db.Set(key, expected)
-	if err != nil {
-		t.Error(err)
-	}
-	err = db.Set([]byte("__test__"), []byte("__value__"))
-	if err != nil {
-		t.Error(err)
-	}
+	count := 150
+	done := make(chan struct{})
+	go func() {
+		start := glog.Trace("set", time.Time{})
+		for i := 0; i < count; i++ {
+			err := db.Set(
+				[]byte(fmt.Sprintf("key_%d", i)), []byte(fmt.Sprintf("value__%d", i)))
+			if err != nil {
+				t.Error(err)
+			}
+		}
+		glog.Trace("set", start)
+		close(done)
+	}()
 
 	// when
-	actual, ok := db.Get(key)
-
-	// then
-	if !ok || !bytes.Equal(actual, expected) {
-		t.Errorf("want %s got %s", expected, actual)
+	<-done
+	start := glog.Trace("get", time.Time{})
+	for i := 0; i < count; i++ {
+		if _, ok := db.Get([]byte(fmt.Sprintf("key_%d", i))); !ok {
+			t.Errorf("missing rawKey %d", i)
+		}
 	}
+	glog.Trace("get", start)
+	db.Close()
 }

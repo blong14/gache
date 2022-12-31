@@ -3,390 +3,413 @@ package xskiplist
 import (
 	"errors"
 	"fmt"
-	"hash/maphash"
+	"hash/fnv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"unsafe"
 
-	_ "unsafe"
+	mathrand "math/rand"
 )
 
-const MaxLevels = 24
-
-type unlink int
-
-var seed = maphash.MakeSeed()
-
-func Hash(key []byte) uint64 {
-	var h maphash.Hash
-	h.SetSeed(seed)
+func hash(key []byte) uint64 {
+	h := fnv.New64()
 	_, _ = h.Write(key)
 	return h.Sum64()
 }
 
-// Uint32 returns a lock free uint32 value.
-//
-//go:linkname Uint32 runtime.fastrand
-func Uint32() uint32
-
-// Uint32n returns a lock free uint32 value in the interval [0, n).
-//
-//go:linkname Uint32n runtime.fastrandn
-func Uint32n(n uint32) uint32
-
-const (
-	ForceUnlink unlink = iota
-	AssistUnlink
-	DontUnlink
-)
-
-type markable struct {
-	marked bool
-	next   *node
-}
-
-func (m *markable) String() string {
-	return fmt.Sprintf("[%s]", m.next)
-}
-
-func stripMark(x *markable) *markable {
-	if x == nil {
-		return nil
-	}
-	return &markable{
-		next: x.next,
-	}
-}
-
-func hasMark(x *markable) bool {
-	if x == nil {
-		return false
-	}
-	return x.marked
-}
-
-func getNode(x *markable) *node {
-	if x == nil {
-		return nil
-	}
-	return x.next
-}
-
 type node struct {
-	key       []byte
-	val       []byte
-	index     uint64
-	numLevels uint
-	next      []*markable
+	hash uint64
+	next *node
+	key  []byte
+	val  []byte
 }
 
-func (n *node) reset() {
-	n.key = nil
-	n.val = nil
-	n.numLevels = 0
-	n.next = nil
-	n.index = 0
-}
-
-func (n *node) String() string {
-	return fmt.Sprintf("[%s:%s]", string(n.key), string(n.val))
-}
-
-func newNode(k, v []byte, levels uint) *node {
+func newNode(h uint64, k, v []byte, n *node) *node {
 	return &node{
-		key:       k,
-		val:       v,
-		numLevels: levels,
-		next:      make([]*markable, MaxLevels),
+		hash: h,
+		key:  k,
+		val:  v,
+		next: n,
 	}
+}
+
+func (n *node) Next() *node {
+	return (*node)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&n.next))))
+}
+
+type index struct {
+	node  *node
+	down  *index
+	right *index
+}
+
+func newIndex(n *node, down, right *index) *index {
+	return &index{
+		node:  n,
+		down:  down,
+		right: right,
+	}
+}
+
+func (i *index) Node() *node {
+	return (*node)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&i.node))))
+}
+
+func (i *index) Down() *index {
+	return (*index)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&i.down))))
+}
+
+func (i *index) Right() *index {
+	if i == nil {
+		return nil
+	}
+	return (*index)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&i.right))))
 }
 
 type SkipList struct {
-	head      *node
-	highWater uint32
+	head  *index
+	count uint64
 }
 
 func New() *SkipList {
-	return &SkipList{
-		head:      newNode(nil, nil, MaxLevels),
-		highWater: 1,
-	}
+	return &SkipList{}
 }
 
-func (sk *SkipList) randomLevel() uint64 {
-	levels := Uint32n(MaxLevels + 1)
-	if levels == 0 {
-		return 1
-	}
-	return uint64(levels)
+func (sk *SkipList) top() *index {
+	return (*index)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&sk.head))))
 }
 
-var itemPool = sync.Pool{New: func() interface{} { return new(node) }}
-
-func (sk *SkipList) findPreds(preds, succs []*node, n int, key uint64, link unlink) *node {
-	d := -1
-	i := itemPool.Get()
-	defer itemPool.Put(i)
-	item := i.(*node)
-	item.reset()
-	pred := sk.head
-	highWater := atomic.LoadUint32(&sk.highWater)
-	for level := int(highWater - 1); level >= 0; level-- {
-		curr := pred.next[level]
-		if curr == nil && level >= n {
-			continue
-		}
-		if hasMark(curr) {
-			return sk.findPreds(preds, succs, n, key, link) // retry
-		}
-		item = getNode(curr)
-		for item != nil {
-			curr = item.next[level]
-			for hasMark(curr) {
-				if link == DontUnlink {
-					m := stripMark(curr)
-					if m == nil {
-						break
-					}
-					item = getNode(m)
-					if item == nil {
-						break
-					}
-					curr = item.next[level]
-				} else {
-					m := stripMark(curr)
-					other := (*markable)(atomic.SwapPointer(
-						(*unsafe.Pointer)(unsafe.Pointer(&pred.next[level])),
-						unsafe.Pointer(m),
-					))
-					if other == curr {
-						m = stripMark(curr)
-						if m != nil {
-							item = getNode(m)
-						}
-					} else {
-						if hasMark(other) {
-							return sk.findPreds(preds, succs, n, key, link)
-						}
-						item = getNode(other)
-					}
-					if item != nil {
-						curr = item.next[level]
-					} else {
-						curr = nil
-					}
-				}
-			}
-			if item == nil {
-				break
-			}
-			if key > item.index {
-				d = 1
-			} else if key == item.index {
-				d = 0
+func (sk *SkipList) findPredecessor(key uint64) *node {
+	q := sk.top()
+	for q != nil {
+		r := q.Right()
+		for r != nil {
+			p := r.Node()
+			if p == nil || p.hash == 0 || p.val == nil {
+				atomic.CompareAndSwapPointer(
+					(*unsafe.Pointer)(unsafe.Pointer(&q.right)),
+					unsafe.Pointer(r),
+					unsafe.Pointer(r.Right()),
+				)
+			} else if key > p.hash {
+				q = r
+				r = q.Right()
 			} else {
-				d = -1
 				break
 			}
-			//d = bytes.Compare(key, item.key) // a > b = 1
-			//if d < 0 {
-			//	break
-			//}
-			if d == 0 && link != ForceUnlink {
-				break
-			}
-			pred = item
-			item = getNode(curr)
 		}
-		if level < n {
-			if preds != nil {
-				preds[level] = pred
-			}
-			if succs != nil {
-				succs[level] = item
-			}
+		d := q.Down()
+		if d == nil {
+			return q.Node()
 		}
-	}
-	if d == 0 {
-		return item
+		q = d
 	}
 	return nil
 }
 
-func (sk *SkipList) updateItem(item *node, newVal []byte) ([]byte, bool) {
-	for {
-		oldVal := item.val
-		if oldVal == nil {
-			return nil, false
-		}
-		if atomic.CompareAndSwapPointer(
-			(*unsafe.Pointer)(unsafe.Pointer(&item.val)),
-			unsafe.Pointer(&oldVal),
-			unsafe.Pointer(&newVal),
-		) {
-			return newVal, true
+func (sk *SkipList) findNode(key uint64) *node {
+	r := sk.findPredecessor(key)
+	for r != nil {
+		n := r.Next()
+		for n != nil {
+			if key > n.hash {
+				r = n
+				n = r.Next()
+			} else if key == n.hash {
+				return n
+			} else {
+				return nil
+			}
 		}
 	}
+	return nil
 }
 
-func (sk *SkipList) cas(key, newVal []byte) ([]byte, bool) {
-	if len(newVal) == 0 {
+func (sk *SkipList) addIndices(q *index, skips int, x *index) bool {
+	if x != nil && q != nil {
+		z := x.Node()
+		key := z.hash
+		if key == 0 {
+			return false
+		}
+		var retrying bool
+		for {
+			c := -1
+			r := q.Right()
+			if r != nil {
+				p := r.Node()
+				if p == nil || p.hash == 0 || p.val == nil {
+					atomic.CompareAndSwapPointer(
+						(*unsafe.Pointer)(unsafe.Pointer(&q.right)),
+						unsafe.Pointer(r),
+						unsafe.Pointer(r.Right()),
+					)
+					c = 0
+				} else if key > p.hash {
+					q = r
+					r = q.Right()
+					c = 1
+				} else if key == p.hash {
+					c = 0
+				}
+				if c == 0 {
+					break
+				}
+			} else {
+				c = -1
+			}
+			if c < 0 {
+				d := q.Down()
+				if d != nil && skips > 0 {
+					skips -= 1
+					q = d
+				} else if d != nil && !retrying && !sk.addIndices(d, 0, x.Down()) {
+					break
+				} else {
+					x.right = r
+					if atomic.CompareAndSwapPointer(
+						(*unsafe.Pointer)(unsafe.Pointer(&q.right)),
+						unsafe.Pointer(r),
+						unsafe.Pointer(x),
+					) {
+						return true
+					} else {
+						retrying = true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+func (sk *SkipList) Get(key []byte) ([]byte, bool) {
+	hashedValue := hash(key)
+	if hashedValue == 0 {
 		return nil, false
 	}
-	n := sk.randomLevel()
-	index := Hash(key)
-	preds := make([]*node, MaxLevels)
-	nexts := make([]*node, MaxLevels)
-	oldItem := sk.findPreds(preds, nexts, int(n), index, AssistUnlink)
-	if oldItem != nil {
-		retVal, ok := sk.updateItem(oldItem, newVal)
-		if retVal != nil && ok {
-			return retVal, ok
-		}
-		return sk.cas(key, newVal)
-	}
-	newItem := newNode(key, newVal, uint(n))
-	newItem.index = index
-	for level := 0; level < int(newItem.numLevels); level++ {
-		n := nexts[level]
-		if n != nil {
-			newItem.next[level] = &markable{next: n}
-		}
-	}
-
-	pred := preds[0]
-	next := pred.next[0]
-	newMarkable := markable{next: newItem}
-	old := (*markable)(atomic.SwapPointer(
-		(*unsafe.Pointer)(unsafe.Pointer(&pred.next[0])),
-		unsafe.Pointer(&newMarkable),
-	))
-	if next != nil && old != next {
-		return sk.cas(key, newVal) // retry
-	}
-	for level := 1; level < int(newItem.numLevels); level++ {
-		for {
-			curr := preds[level]
-			if curr == nil {
-				break
-			}
-			succ := curr.next[level]
-			old = (*markable)(atomic.SwapPointer(
-				(*unsafe.Pointer)(unsafe.Pointer(&curr.next[level])),
-				unsafe.Pointer(&newMarkable),
-			))
-			if old == succ {
-				break
-			}
-			sk.findPreds(preds, nexts, int(newItem.numLevels), index, AssistUnlink)
-			for i := level; i < int(newItem.numLevels); i++ {
-				oldNext := newItem.next[i]
-				succ := nexts[i]
-				var next *markable
-				if succ != nil {
-					next = succ.next[i]
-				}
-				if next == oldNext {
-					continue
-				}
-				old := atomic.SwapPointer(
-					(*unsafe.Pointer)(unsafe.Pointer(&newItem.next[i])),
-					unsafe.Pointer(&next),
+	q := sk.top()
+	for q != nil {
+		r := q.Right()
+	loop:
+		for r != nil {
+			p := r.Node()
+			switch {
+			case p == nil || p.hash == 0 || p.val == nil:
+				atomic.CompareAndSwapPointer(
+					(*unsafe.Pointer)(unsafe.Pointer(&q.right)),
+					unsafe.Pointer(r),
+					unsafe.Pointer(r.Right()),
 				)
-				if hasMark((*markable)(unsafe.Pointer(old))) {
-					sk.findPreds(nil, nil, 0, index, ForceUnlink)
-					return nil, false
-				}
+			case hashedValue > p.hash:
+				q = r
+				r = q.Right()
+			case hashedValue == p.hash:
+				return p.val, true
+			default:
+				break loop
 			}
 		}
-	}
-	if hasMark(newItem.next[newItem.numLevels-1]) {
-		sk.findPreds(nil, nil, 0, index, ForceUnlink)
-	}
-	highWater := atomic.LoadUint32(&sk.highWater)
-	if uint32(newItem.numLevels) > highWater {
-		atomic.StoreUint32(&sk.highWater, uint32(newItem.numLevels))
-	}
-	return newVal, true
-}
-
-func (sk *SkipList) lookup(key []byte) ([]byte, bool) {
-	item := sk.findPreds(nil, nil, 0, Hash(key), DontUnlink)
-	if item != nil {
-		return item.val, true
+		d := q.Down()
+		if d != nil {
+			q = d
+		} else {
+			b := q.Node()
+			if b != nil {
+				n := b.Next()
+				for n != nil {
+					if n.val == nil || n.hash == 0 || hashedValue > n.hash {
+						b = n
+						n = b.Next()
+					} else {
+						if hashedValue == n.hash {
+							return n.val, true
+						}
+						break
+					}
+				}
+			}
+			break
+		}
 	}
 	return nil, false
 }
 
-func (sk *SkipList) Set(k, v []byte) error {
-	_, ok := sk.cas(k, v)
-	if !ok {
-		return errors.New("not able to set key/value")
+func (sk *SkipList) Set(key, value []byte) error {
+	if key == nil {
+		return errors.New("missing key")
 	}
-	return nil
-}
-
-func (sk *SkipList) Get(k []byte) ([]byte, bool) {
-	return sk.lookup(k)
-}
-
-func (sk *SkipList) Count() uint64 {
-	return 0
-}
-
-func (sk *SkipList) Height() uint64 {
-	return 0
-}
-
-func (sk *SkipList) Print() {
-	var line strings.Builder
-	for level := MaxLevels - 1; level >= 0; level-- {
-		item := sk.head
-		if item.next[level] == nil {
-			continue
-		}
-		line.WriteString(fmt.Sprintf("(%d)", level))
-		for item != nil {
-			curr := item.next[level]
-			line.WriteString(fmt.Sprintf("%s", item))
-			curr = stripMark(curr)
-			item = getNode(curr)
-		}
-		line.WriteString("\n")
-	}
-	fmt.Println(line.String())
-	line.Reset()
-	item := sk.head
-	for item != nil {
-		line.WriteString(fmt.Sprintf("%s ", item))
-		if item != sk.head {
-			line.WriteString(fmt.Sprintf("[%d]", item.numLevels))
+	var b *node
+	hashedKey := hash(key)
+	for {
+		levels := 0
+		h := sk.top()
+		if h == nil {
+			base := newNode(0, nil, nil, nil)
+			nh := newIndex(base, nil, nil)
+			if atomic.CompareAndSwapPointer(
+				(*unsafe.Pointer)(unsafe.Pointer(&sk.head)),
+				unsafe.Pointer(h),
+				unsafe.Pointer(nh),
+			) {
+				b = base
+				h = nh
+			} else {
+				b = nil
+			}
 		} else {
-			line.WriteString("[HEAD]")
-		}
-		for level := 0; level < int(item.numLevels); level++ {
-			curr := stripMark(item.next[level])
-			line.WriteString(fmt.Sprintf(" %s", getNode(curr)))
-			if item == sk.head && item.next[level] == nil {
-				break
+			q := h
+			for q != nil {
+				r := q.Right()
+				for r != nil {
+					p := r.Node()
+					if p == nil || p.hash == 0 || p.val == nil {
+						atomic.CompareAndSwapPointer(
+							(*unsafe.Pointer)(unsafe.Pointer(&q.right)),
+							unsafe.Pointer(r),
+							unsafe.Pointer(r.Right()),
+						)
+					} else if hashedKey > p.hash {
+						q = r
+						r = q.Right()
+					} else {
+						break
+					}
+				}
+				if q != nil {
+					d := q.Down()
+					if d != nil {
+						levels += 1
+						q = d
+					} else {
+						b = q.Node()
+						break
+					}
+				}
 			}
 		}
-		line.WriteString("\n")
-		curr := stripMark(item.next[0])
-		item = getNode(curr)
+		if b != nil {
+			var z *node
+			for {
+				c := -1
+				n := b.Next()
+				if n == nil {
+					c = -1
+				} else if n.hash == 0 {
+					break
+				} else if n.val == nil {
+					// unlinkNode(b, n)
+					c = 1
+				} else if hashedKey > n.hash {
+					b = n
+					c = 1
+				} else if hashedKey == n.hash {
+					c = 0
+				}
+				if c == 0 {
+					// already in list
+					return nil
+				}
+				if c < 0 {
+					p := newNode(hashedKey, key, value, n)
+					if atomic.CompareAndSwapPointer(
+						(*unsafe.Pointer)(unsafe.Pointer(&b.next)),
+						unsafe.Pointer(n),
+						unsafe.Pointer(p),
+					) {
+						z = p
+						break
+					}
+				}
+			}
+			if z != nil {
+				lr := mathrand.Int63()
+				if (lr & 0x3) == 0 {
+					hr := mathrand.Int63()
+					rnd := hr<<32 | lr&0xffffffff
+					skips := levels
+					var x *index
+					for {
+						skips -= 1
+						x = newIndex(z, x, nil)
+						// x = sk.idxPool.Allocate(z, x, nil)
+						if rnd <= 0 || skips < 0 {
+							break
+						} else {
+							rnd >>= 1
+						}
+					}
+					if sk.addIndices(h, skips, x) && skips < 0 && sk.top() == h {
+						// hx := sk.idxPool.Allocate(z, x, nil)
+						hx := newIndex(z, x, nil)
+						// nh := sk.idxPool.Allocate(h.Node(), h, hx)
+						nh := newIndex(h.Node(), h, hx)
+						atomic.CompareAndSwapPointer(
+							(*unsafe.Pointer)(unsafe.Pointer(&sk.head)),
+							unsafe.Pointer(h),
+							unsafe.Pointer(nh),
+						)
+					}
+					if z.val == nil {
+						sk.findPredecessor(hashedKey)
+					}
+				}
+				atomic.AddUint64(&sk.count, 1)
+				return nil
+			}
+		}
 	}
-	fmt.Println(line.String())
+}
+
+func (sk *SkipList) Remove(k uint64) ([]byte, bool) {
+	return nil, true
 }
 
 func (sk *SkipList) Range(f func(k, v []byte) bool) {
-	curr := sk.head.next[0]
+	f([]byte("test"), []byte("test"))
+}
+
+func (sk *SkipList) Print() {
+	out := strings.Builder{}
+	out.Reset()
+	curr := sk.top()
+	d := curr.Down()
 	for curr != nil {
-		item := getNode(curr)
-		ok := f(item.key, item.val)
-		curr = item.next[0]
-		if !ok || curr == nil {
+		r := curr.Right()
+		for r != nil {
+			n := r.Node()
+			out.WriteString(fmt.Sprintf("[%d - %s->]\t", n.hash, n.key))
+			curr = r
+			r = curr.Right()
+		}
+		if d.Down() != nil {
+			curr = d
+			d = d.Down()
+			out.WriteString("\n")
+		} else {
+			out.WriteString("\n")
+			curr = d
+			for curr != nil {
+				n := curr.Node()
+				for n != nil {
+					if n.hash == curr.Node().hash {
+						out.WriteString(fmt.Sprintf("[%d-%s->] ", n.hash, n.key))
+					} else {
+						out.WriteString(fmt.Sprintf("%s-> ", n.key))
+					}
+					n = n.Next()
+				}
+				curr = r
+				if curr != nil {
+					r = curr.Right()
+				}
+			}
 			break
 		}
 	}
+	fmt.Println(out.String())
+}
+
+func (sk *SkipList) Count() uint64 {
+	return atomic.LoadUint64(&sk.count)
 }
