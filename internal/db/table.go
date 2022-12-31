@@ -34,20 +34,6 @@ type fileDatabase struct {
 	onSet    chan struct{}
 }
 
-// New creates a new Table
-//
-// opts *TableOpts allow for specific database
-// configuration.
-//
-// Example:
-// opts := &TableOpts{TableName: "foo", DataDir: "bar", InMemory: True}
-// db := New(opts)
-// defer db.Close()
-// err := db.Set(k, v)
-// if err != nil {
-//    panic(err)
-// }
-// v, ok := db.Get(k)
 func New(opts *TableOpts) Table {
 	if opts.InMemory {
 		return &inMemoryDatabase{

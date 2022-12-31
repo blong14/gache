@@ -10,7 +10,7 @@ import (
 )
 
 type MemTable struct {
-	flush      chan struct{}
+	// flush      chan struct{}
 	readBuffer *gskl.SkipList
 }
 

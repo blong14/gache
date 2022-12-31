@@ -2,18 +2,18 @@ package db_test
 
 import (
 	"fmt"
-	glog "github.com/blong14/gache/internal/logging"
 	"testing"
 	"time"
 
 	gdb "github.com/blong14/gache/internal/db"
+	glog "github.com/blong14/gache/internal/logging"
 )
 
 func TestGetAndSet(t *testing.T) {
 	opts := &gdb.TableOpts{
 		DataDir:   []byte("testdata"),
 		TableName: []byte("default"),
-		InMemory:  false,
+		InMemory:  true,
 	}
 	db := gdb.New(opts)
 
