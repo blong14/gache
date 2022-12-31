@@ -60,6 +60,9 @@ func (i *index) Down() *index {
 }
 
 func (i *index) Right() *index {
+	if i == nil {
+		return nil
+	}
 	return (*index)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&i.right))))
 }
 
@@ -238,120 +241,124 @@ func (sk *SkipList) Set(key, value []byte) error {
 	}
 	var b *node
 	hashedKey := hash(key)
-	levels := 0
-	h := sk.top()
-	if h == nil {
-		base := newNode(0, nil, nil, nil)
-		nh := newIndex(base, nil, nil)
-		if atomic.CompareAndSwapPointer(
-			(*unsafe.Pointer)(unsafe.Pointer(&sk.head)),
-			unsafe.Pointer(h),
-			unsafe.Pointer(nh),
-		) {
-			b = base
-			h = nh
+	for {
+		levels := 0
+		h := sk.top()
+		if h == nil {
+			base := newNode(0, nil, nil, nil)
+			nh := newIndex(base, nil, nil)
+			if atomic.CompareAndSwapPointer(
+				(*unsafe.Pointer)(unsafe.Pointer(&sk.head)),
+				unsafe.Pointer(h),
+				unsafe.Pointer(nh),
+			) {
+				b = base
+				h = nh
+			} else {
+				b = nil
+			}
 		} else {
-			b = nil
-		}
-	} else {
-		q := h
-		for q != nil {
-			r := q.Right()
-			for r != nil {
-				p := r.Node()
-				if p == nil || p.hash == 0 || p.val == nil {
-					atomic.CompareAndSwapPointer(
-						(*unsafe.Pointer)(unsafe.Pointer(&q.right)),
-						unsafe.Pointer(r),
-						unsafe.Pointer(r.Right()),
-					)
-				} else if hashedKey > p.hash {
-					q = r
-					r = q.Right()
-				} else {
-					break
-				}
-			}
-			if q != nil {
-				d := q.Down()
-				if d != nil {
-					levels += 1
-					q = d
-				} else {
-					b = q.Node()
-					break
-				}
-			}
-		}
-	}
-	if b != nil {
-		var z *node
-		for {
-			c := -1
-			n := b.Next()
-			if n == nil {
-				c = -1
-			} else if n.hash == 0 {
-				break
-			} else if n.val == nil {
-				// unlinkNode(b, n)
-				c = 1
-			} else if hashedKey > n.hash {
-				b = n
-				c = 1
-			} else if hashedKey == n.hash {
-				c = 0
-			}
-			if c == 0 {
-				// already in list
-				return nil
-			}
-			if c < 0 {
-				p := newNode(hashedKey, key, value, n)
-				if atomic.CompareAndSwapPointer(
-					(*unsafe.Pointer)(unsafe.Pointer(&b.next)),
-					unsafe.Pointer(n),
-					unsafe.Pointer(p),
-				) {
-					z = p
-					break
-				}
-			}
-		}
-		if z != nil {
-			lr := mathrand.Int63()
-			if (lr & 0x3) == 0 {
-				hr := mathrand.Int63()
-				rnd := hr<<32 | lr&0xffffffff
-				skips := levels
-				var x *index
-				for {
-					skips -= 1
-					x = newIndex(z, x, nil)
-					if rnd <= 0 || skips < 0 {
-						break
+			q := h
+			for q != nil {
+				r := q.Right()
+				for r != nil {
+					p := r.Node()
+					if p == nil || p.hash == 0 || p.val == nil {
+						atomic.CompareAndSwapPointer(
+							(*unsafe.Pointer)(unsafe.Pointer(&q.right)),
+							unsafe.Pointer(r),
+							unsafe.Pointer(r.Right()),
+						)
+					} else if hashedKey > p.hash {
+						q = r
+						r = q.Right()
 					} else {
-						rnd >>= 1
+						break
 					}
 				}
-				if sk.addIndices(h, skips, x) && skips < 0 && sk.top() == h {
-					hx := newIndex(z, x, nil)
-					nh := newIndex(h.Node(), h, hx)
-					atomic.CompareAndSwapPointer(
-						(*unsafe.Pointer)(unsafe.Pointer(&sk.head)),
-						unsafe.Pointer(h),
-						unsafe.Pointer(nh),
-					)
-				}
-				if z.val == nil {
-					sk.findPredecessor(hashedKey)
+				if q != nil {
+					d := q.Down()
+					if d != nil {
+						levels += 1
+						q = d
+					} else {
+						b = q.Node()
+						break
+					}
 				}
 			}
-			atomic.AddUint64(&sk.count, 1)
-			return nil
+		}
+		if b != nil {
+			var z *node
+			for {
+				c := -1
+				n := b.Next()
+				if n == nil {
+					c = -1
+				} else if n.hash == 0 {
+					break
+				} else if n.val == nil {
+					// unlinkNode(b, n)
+					c = 1
+				} else if hashedKey > n.hash {
+					b = n
+					c = 1
+				} else if hashedKey == n.hash {
+					c = 0
+				}
+				if c == 0 {
+					// already in list
+					return nil
+				}
+				if c < 0 {
+					p := newNode(hashedKey, key, value, n)
+					if atomic.CompareAndSwapPointer(
+						(*unsafe.Pointer)(unsafe.Pointer(&b.next)),
+						unsafe.Pointer(n),
+						unsafe.Pointer(p),
+					) {
+						z = p
+						break
+					}
+				}
+			}
+			if z != nil {
+				lr := mathrand.Int63()
+				if (lr & 0x3) == 0 {
+					hr := mathrand.Int63()
+					rnd := hr<<32 | lr&0xffffffff
+					skips := levels
+					var x *index
+					for {
+						skips -= 1
+						x = newIndex(z, x, nil)
+						// x = sk.idxPool.Allocate(z, x, nil)
+						if rnd <= 0 || skips < 0 {
+							break
+						} else {
+							rnd >>= 1
+						}
+					}
+					if sk.addIndices(h, skips, x) && skips < 0 && sk.top() == h {
+						// hx := sk.idxPool.Allocate(z, x, nil)
+						hx := newIndex(z, x, nil)
+						// nh := sk.idxPool.Allocate(h.Node(), h, hx)
+						nh := newIndex(h.Node(), h, hx)
+						atomic.CompareAndSwapPointer(
+							(*unsafe.Pointer)(unsafe.Pointer(&sk.head)),
+							unsafe.Pointer(h),
+							unsafe.Pointer(nh),
+						)
+					}
+					if z.val == nil {
+						sk.findPredecessor(hashedKey)
+					}
+				}
+				atomic.AddUint64(&sk.count, 1)
+				return nil
+			}
 		}
 	}
-	return fmt.Errorf("could not find insertion spot for %s", key)
 }
 
 func (sk *SkipList) Remove(k uint64) ([]byte, bool) {
@@ -388,7 +395,7 @@ func (sk *SkipList) Print() {
 					if n.hash == curr.Node().hash {
 						out.WriteString(fmt.Sprintf("[%d-%s->] ", n.hash, n.key))
 					} else {
-						out.WriteString(fmt.Sprintf("%d-> ", n.hash))
+						out.WriteString(fmt.Sprintf("%s-> ", n.key))
 					}
 					n = n.Next()
 				}

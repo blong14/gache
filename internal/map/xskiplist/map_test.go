@@ -1,9 +1,7 @@
 package xskiplist_test
 
 import (
-	"encoding/binary"
 	"fmt"
-	"math/rand"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -54,14 +52,6 @@ func TestCount(t *testing.T) {
 			}
 		},
 	})
-}
-
-func randomKey(rng *rand.Rand, b []byte) []byte {
-	key := rng.Uint32()
-	key2 := rng.Uint32()
-	binary.LittleEndian.PutUint32(b, key)
-	binary.LittleEndian.PutUint32(b[4:], key2)
-	return b
 }
 
 func TestGetAndSet(t *testing.T) {
