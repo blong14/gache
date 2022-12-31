@@ -114,8 +114,7 @@ iloop:
 func (sl *SkipList) Get(key []byte) ([]byte, bool) {
 	preds := make([]*node, maxHeight)
 	succs := make([]*node, maxHeight)
-	k := hash(key)
-	lFound := sl.search(k, preds, succs)
+	lFound := sl.search(hash(key), preds, succs)
 	if lFound != -1 && succs[lFound].fullyLinked && !succs[lFound].marked {
 		return succs[lFound].value, true
 	}
@@ -123,12 +122,6 @@ func (sl *SkipList) Get(key []byte) ([]byte, bool) {
 }
 
 func (sl *SkipList) Set(key, value []byte) error {
-	var (
-		valid    bool
-		pred     *node
-		succ     *node
-		prevPred *node
-	)
 	topLayer := XUint32n(uint32(maxHeight))
 	if topLayer == 0 {
 		topLayer = 1
@@ -136,7 +129,7 @@ func (sl *SkipList) Set(key, value []byte) error {
 	k := hash(key)
 loop:
 	for {
-		valid = true
+		valid := true
 		highestLocked := -1
 		preds := make([]*node, maxHeight)
 		succs := make([]*node, maxHeight)
@@ -150,10 +143,10 @@ loop:
 			}
 			continue
 		}
+		var prevPred *node
 		height := sl.Height()
 		for layer := uint64(0); valid && (layer <= height); layer++ {
-			pred = preds[layer]
-			succ = succs[layer]
+			pred := preds[layer]
 			if pred != nil && pred != prevPred {
 				select {
 				case pred.lock <- struct{}{}:
@@ -165,6 +158,7 @@ loop:
 					continue loop
 				}
 			}
+			succ := succs[layer]
 			if succ != nil {
 				valid = !pred.marked && !succ.marked && pred.Next(layer) == succ
 			}
@@ -178,19 +172,15 @@ loop:
 		}
 		// at this point; this thread holds all locks
 		// safe to create a new node
-		node := &node{}
-		node.lock = make(chan struct{}, 1)
-		node.rawKey = key
+		node := newNode(key, value)
 		node.hash = k
-		node.value = value
 		node.topLayer = uint8(topLayer)
 		for layer := uint64(0); layer <= uint64(topLayer); layer++ {
 			node.nexts[layer] = succs[layer]
-			pred := preds[layer]
-			n := pred.Next(layer)
+			oldNext := preds[layer].Next(layer)
 			atomic.CompareAndSwapPointer(
-				(*unsafe.Pointer)(unsafe.Pointer(&pred.nexts[layer])),
-				unsafe.Pointer(n),
+				(*unsafe.Pointer)(unsafe.Pointer(&preds[layer].nexts[layer])),
+				unsafe.Pointer(oldNext),
 				unsafe.Pointer(node),
 			)
 		}
@@ -218,12 +208,12 @@ func (sl *SkipList) Print() {
 	curr := sl.Sentinal
 	for curr != nil {
 		for i := uint8(0); i < sl.MaxHeight; i++ {
-			n := curr.nexts[i]
+			n := curr.Next(uint64(i))
 			if n != nil {
 				out.WriteString(fmt.Sprintf("\t(%d, %s)", n.hash, n.rawKey))
 			}
 		}
-		curr = curr.nexts[0]
+		curr = curr.Next(0)
 		out.WriteString("\n")
 	}
 	fmt.Println(out.String())
@@ -233,7 +223,7 @@ func (sl *SkipList) Range(f func(k, v []byte) bool) {
 	curr := sl.Sentinal.nexts[0]
 	for curr != nil {
 		ok := f(curr.rawKey, curr.value)
-		curr = curr.nexts[0]
+		curr = curr.Next(0)
 		if !ok || curr == nil {
 			break
 		}
