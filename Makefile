@@ -1,21 +1,28 @@
-init:
-	~/sdk/go1.18/bin/go mod tidy
-	~/sdk/go1.18/bin/go mod vendor
+GO=~/sdk/go1.18/bin/go
 
 bench: clean
-	~/sdk/go1.18/bin/go test -cpu=1,4,8 -bench=BenchmarkSkiplist -run=XXX ./...
+	$(GO) test -cpu=1,4,8 -bench=BenchmarkSkiplist -run=XXX ./...
+
+bind:
+	$(GO) build -o $(PWD)/bin/gache.so -buildmode=c-shared github.com/blong14/gache/cmd/bind/...
+
+build:
+	$(GO) build -o $(PWD)/bin/ github.com/blong14/gache/cmd/...
 
 clean:
-	~/sdk/go1.18/bin/go clean --cache --testcache ./...
+	$(GO) clean --cache --testcache ./...
+	rm $(PWD)/bin/*
+
+init: go.mod go.sum
+	$(GO) mod tidy
+	$(GO) mod vendor
 
 lint:
 	docker run --rm -v $(PWD):/app -w /app golangci/golangci-lint:v1.50 golangci-lint run
 
 run: lint
-	~/sdk/go1.18/bin/go run github.com/blong14/gache
+	$(GO) run github.com/blong14/gache
 
 test:
-	~/sdk/go1.18/bin/go test -race -cpu=8 -parallel=8 ./...
+	$(GO) test -race -cpu=8 -parallel=8 ./...
 
-build:
-	~/sdk/go1.18/bin/go build -o $(PWD)/bin/ github.com/blong14/gache/cmd/...
