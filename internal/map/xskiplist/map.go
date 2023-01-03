@@ -7,9 +7,12 @@ import (
 	"strings"
 	"sync/atomic"
 	"unsafe"
-
-	mathrand "math/rand"
 )
+
+// XUint32 returns a lock free uint32 value.
+//
+//go:linkname XUint32 runtime.fastrand
+func XUint32() uint32
 
 func hash(key []byte) uint64 {
 	h := fnv.New64()
@@ -323,9 +326,11 @@ func (sk *SkipList) Set(key, value []byte) error {
 				}
 			}
 			if z != nil {
-				lr := mathrand.Int63()
+				// lr := mathrand.Int63()
+				lr := uint64(XUint32())
 				if (lr & 0x3) == 0 {
-					hr := mathrand.Int63()
+					// hr := mathrand.Int63()
+					hr := uint64(XUint32())
 					rnd := hr<<32 | lr&0xffffffff
 					skips := levels
 					var x *index
@@ -366,7 +371,88 @@ func (sk *SkipList) Remove(k uint64) ([]byte, bool) {
 }
 
 func (sk *SkipList) Range(f func(k, v []byte) bool) {
-	f([]byte("test"), []byte("test"))
+	h := sk.top()
+	if h == nil || h.Node() == nil {
+		return
+	}
+	b := h.Node()
+	if b != nil {
+		n := b.Next()
+		for n != nil {
+			if n.val != nil {
+				ok := f(n.key, n.val)
+				if !ok {
+					break
+				}
+			}
+			b = n
+			n = b.Next()
+		}
+	}
+}
+
+type iter struct {
+	lastReturned *node
+	nxt          *node
+	start        *uint64
+	end          *uint64
+}
+
+func newIter(sk *SkipList, s, e *uint64) *iter {
+	i := &iter{start: s, end: e}
+	h := sk.top()
+	if h != nil {
+		n := h.Node()
+		i.advance(n)
+	}
+	return i
+}
+
+func (i *iter) advance(b *node) {
+	var n *node
+	i.lastReturned = b
+	if i.lastReturned != nil {
+		for n = b.Next(); n != nil && n.val == nil; {
+			b = n
+			n = b.Next()
+		}
+	}
+	if i.start != nil && n != nil && *i.start > n.hash {
+		b = n
+		n = b.Next()
+		for n != nil {
+			if *i.start == n.hash {
+				break
+			} else if *i.start > n.hash {
+				b = n
+				n = b.Next()
+			}
+		}
+	}
+	i.nxt = n
+}
+
+func (i *iter) hasNext() bool {
+	if i.end == nil {
+		return i.nxt != nil
+	}
+	return i.nxt != nil && i.nxt.hash <= *i.end
+}
+
+func (i *iter) next() *node {
+	n := i.nxt
+	i.advance(n)
+	return n
+}
+
+func (sk *SkipList) Scan(start, end []byte, f func(k, v []byte) bool) {
+	s := hash(start)
+	e := hash(end)
+	itr := newIter(sk, &s, &e)
+	for itr.hasNext() {
+		n := itr.next()
+		f(n.key, n.val)
+	}
 }
 
 func (sk *SkipList) Print() {
