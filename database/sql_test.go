@@ -36,6 +36,13 @@ func TestParse(t *testing.T) {
 				TableName: []byte("default"),
 			},
 		},
+		"select * from default where key between aaa and ddd;": {
+			Header: gdb.QueryHeader{
+				Inst:      gdb.GetRange,
+				TableName: []byte("default"),
+			},
+			KeyRange: gdb.KeyRange{Start: []byte("aaa"), End: []byte("ddd")},
+		},
 	}
 	for test, expected := range tests {
 		t.Run(test, func(t *testing.T) {

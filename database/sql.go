@@ -67,6 +67,22 @@ func newParseContext(scanner *bufio.Scanner, query *gdb.Query) *parseContext {
 					switch scanner.Text() {
 					case "=":
 						continue
+					case "between":
+						if scanner.Scan() {
+							kr := gdb.KeyRange{}
+							kr.Start = []byte(scanner.Text())
+							for scanner.Scan() {
+								switch scanner.Text() {
+								case "and":
+									continue
+								default:
+									kr.End = []byte(strings.TrimSuffix(scanner.Text(), ";"))
+								}
+							}
+							query.KeyRange = kr
+							query.Header.Inst = gdb.GetRange
+						}
+						return nil
 					default:
 						key := strings.TrimSpace(scanner.Text())
 						if strings.HasSuffix(key, ";") {

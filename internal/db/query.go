@@ -11,6 +11,7 @@ const (
 	AddTable QueryInstruction = iota
 	BatchSetValue
 	GetValue
+	GetRange
 	Load
 	Print
 	Range
@@ -52,13 +53,23 @@ type QueryResponse struct {
 	Success bool
 }
 
+type KeyRange struct {
+	Start []byte
+	End   []byte
+}
+
+func (kr *KeyRange) String() string {
+	return fmt.Sprintf("%s %s", kr.Start, kr.End)
+}
+
 type Query struct {
-	ctx    context.Context
-	done   chan QueryResponse
-	Header QueryHeader
-	Key    []byte
-	Value  []byte
-	Values []KeyValue
+	ctx      context.Context
+	done     chan QueryResponse
+	Header   QueryHeader
+	KeyRange KeyRange
+	Key      []byte
+	Value    []byte
+	Values   []KeyValue
 }
 
 func NewQuery(ctx context.Context, outbox chan QueryResponse) *Query {
@@ -70,9 +81,9 @@ func NewQuery(ctx context.Context, outbox chan QueryResponse) *Query {
 
 func (m *Query) String() string {
 	return fmt.Sprintf(
-		"%s %s %s %s %s",
+		"%s %s %s %s %s %s",
 		m.Header.FileName, m.Header.TableName,
-		m.Header.Inst, m.Key, m.Value,
+		m.Header.Inst, m.Key, m.Value, m.KeyRange,
 	)
 }
 
