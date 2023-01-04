@@ -48,18 +48,13 @@ func (va *Table) Execute(ctx context.Context, query *gdb.Query) {
 		})
 		query.Done(gdb.QueryResponse{Success: true})
 	case gdb.GetRange:
-		out := make([][]byte, 0)
-		va.impl.Scan(query.KeyRange.Start, query.KeyRange.End, func(k, v []byte) bool {
-			select {
-			case <-ctx.Done():
-				return false
-			default:
-			}
-			out = append(out, k)
-			return true
-		})
+		values, ok := va.impl.Scan(query.KeyRange.Start, query.KeyRange.End)
+		if !ok {
+			query.Done(gdb.QueryResponse{Success: false})
+			return
+		}
 		query.Done(
-			gdb.QueryResponse{Success: true},
+			gdb.QueryResponse{Success: true, RangeValues: values},
 		)
 	case gdb.SetValue:
 		if err := va.impl.Set(query.Key, query.Value); err != nil {

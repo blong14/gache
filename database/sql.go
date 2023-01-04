@@ -80,7 +80,6 @@ func newParseContext(scanner *bufio.Scanner, query *gdb.Query) *parseContext {
 								}
 							}
 							query.KeyRange = kr
-							query.Header.Inst = gdb.GetRange
 						}
 						return nil
 					default:
@@ -90,13 +89,14 @@ func newParseContext(scanner *bufio.Scanner, query *gdb.Query) *parseContext {
 							return nil
 						}
 						query.Key = []byte(strings.TrimSuffix(key, ","))
+						query.Header.Inst = gdb.GetValue
 					}
 					break
 				}
 				return nil
 			},
 			"select": func(scanner *bufio.Scanner, query *gdb.Query) error {
-				query.Header.Inst = gdb.GetValue
+				query.Header.Inst = gdb.GetRange
 				if !scanner.Scan() {
 					return errors.New("missing token")
 				}

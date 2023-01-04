@@ -14,9 +14,10 @@ import (
 )
 
 type QueryResponse struct {
-	Key     []byte
-	Value   []byte
-	Success bool
+	Key         []byte
+	Value       []byte
+	RangeValues [][][]byte
+	Success     bool
 }
 
 type rows struct {

@@ -43,6 +43,12 @@ func TestParse(t *testing.T) {
 			},
 			KeyRange: gdb.KeyRange{Start: []byte("aaa"), End: []byte("ddd")},
 		},
+		"select * from default;": {
+			Header: gdb.QueryHeader{
+				Inst:      gdb.GetRange,
+				TableName: []byte("default"),
+			},
+		},
 	}
 	for test, expected := range tests {
 		t.Run(test, func(t *testing.T) {
