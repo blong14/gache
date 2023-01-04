@@ -73,3 +73,7 @@ func (va *Table) Execute(ctx context.Context, query *gdb.Query) {
 	default:
 	}
 }
+
+func (va *Table) Stop() {
+	va.impl.Close()
+}

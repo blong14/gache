@@ -34,7 +34,7 @@ func NewDatFile(dir, fileName string) (*os.File, error) {
 		out := []byte{}
 		buf := bytes.NewBuffer(out)
 		buf.Write([]byte(fmt.Sprintf("begin 0755 %s\n", file)))
-		buf.Write(make([]byte, pageSize))
+		buf.Write(make([]byte, pageSize*pageSize*4))
 		buf.Write([]byte("\nend\n"))
 		_, err = f.Write(buf.Bytes())
 		if err != nil {

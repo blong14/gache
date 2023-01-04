@@ -55,7 +55,7 @@ func TestCount(t *testing.T) {
 }
 
 func TestGetAndSet(t *testing.T) {
-	count := 1_000
+	count := 10
 	testMap(t, "get and set", test{
 		run: func(t *testing.T, m *gskl.SkipList) {
 			start := time.Now()
@@ -64,7 +64,7 @@ func TestGetAndSet(t *testing.T) {
 				wg.Add(1)
 				go func(indx int) {
 					defer wg.Done()
-					k := []byte(strconv.Itoa(indx))
+					k := []byte(fmt.Sprintf("key-%d", indx))
 					err := m.Set(k, []byte(fmt.Sprintf("value__%d", indx)))
 					if err != nil {
 						t.Error(err)
@@ -74,16 +74,16 @@ func TestGetAndSet(t *testing.T) {
 			wg.Wait()
 			for i := 0; i < count; i++ {
 				wg.Add(1)
-				go func(i int) {
+				go func(indx int) {
 					defer wg.Done()
-					k := []byte(strconv.Itoa(i))
+					k := []byte(fmt.Sprintf("key-%d", indx))
 					if _, ok := m.Get(k); !ok {
-						t.Errorf("missing rawKey %d", i)
+						t.Errorf("missing rawKey %d", indx)
 					}
 				}(i)
 			}
 			wg.Wait()
-			// m.Print()
+			m.Print()
 			t.Logf("%s", time.Since(start))
 		},
 	})

@@ -91,8 +91,10 @@ func (w *WorkPool) Execute(ctx context.Context, query *gdb.Query) {
 			opts = query.Header.Opts
 		} else {
 			opts = &gdb.TableOpts{
-				TableName: query.Header.TableName,
 				InMemory:  true,
+				WalMode:   true,
+				DataDir:   []byte("testdata"),
+				TableName: query.Header.TableName,
 			}
 		}
 		t := gview.New(opts)
@@ -125,6 +127,10 @@ func (w *WorkPool) WaitAndStop(ctx context.Context) {
 		}(worker)
 	}
 	wg.Wait()
+	w.tables.Range(func(k []byte, table *gview.Table) bool {
+		table.Stop()
+		return true
+	})
 	glog.Track("%T stopped\n", w)
 }
 

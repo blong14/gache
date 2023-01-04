@@ -80,17 +80,27 @@ func (ss *SSTable) Set(k, v []byte) error {
 	buf.Write(k)
 	buf.Write([]byte("::"))
 	buf.Write(v)
+	buf.Write([]byte("\n"))
 	encoded := make([]byte, buf.Len())
 	copy(encoded, buf.Bytes())
-	row, err := gfile.EncodeBlock(encoded)
-	if err != nil {
-		return err
-	}
-	len_, offset, err := ss.data.Append(row)
+
+	//row, err := gfile.EncodeBlock(encoded)
+	//if err != nil {
+	//	return err
+	//}
+	len_, offset, err := ss.data.Append(encoded)
 	if err != nil {
 		return err
 	}
 	ss.index.Store(string(k), &indexValue{offset: int64(offset), length: int64(len_)})
+	return nil
+}
+
+func (ss *SSTable) XSet(buf *bytes.Buffer) error {
+	_, _, err := ss.data.Append(buf.Bytes())
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

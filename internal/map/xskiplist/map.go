@@ -3,7 +3,6 @@ package xskiplist
 import (
 	"errors"
 	"fmt"
-	"hash/fnv"
 	"strings"
 	"sync/atomic"
 	"unsafe"
@@ -12,9 +11,11 @@ import (
 )
 
 func hash(key []byte) uint64 {
-	h := fnv.New64()
-	_, _ = h.Write(key)
-	return h.Sum64()
+	var h uint64
+	for _, b := range key {
+		h = uint64(b) + (h << 6) + (h << 16) - h
+	}
+	return h
 }
 
 type node struct {
@@ -332,7 +333,6 @@ func (sk *SkipList) Set(key, value []byte) error {
 					for {
 						skips -= 1
 						x = newIndex(z, x, nil)
-						// x = sk.idxPool.Allocate(z, x, nil)
 						if rnd <= 0 || skips < 0 {
 							break
 						} else {
@@ -340,9 +340,7 @@ func (sk *SkipList) Set(key, value []byte) error {
 						}
 					}
 					if sk.addIndices(h, skips, x) && skips < 0 && sk.top() == h {
-						// hx := sk.idxPool.Allocate(z, x, nil)
 						hx := newIndex(z, x, nil)
-						// nh := sk.idxPool.Allocate(h.Node(), h, hx)
 						nh := newIndex(h.Node(), h, hx)
 						atomic.CompareAndSwapPointer(
 							(*unsafe.Pointer)(unsafe.Pointer(&sk.head)),
