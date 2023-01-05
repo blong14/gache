@@ -11,6 +11,7 @@ const (
 	AddTable QueryInstruction = iota
 	BatchSetValue
 	GetValue
+	GetRange
 	Load
 	Print
 	Range
@@ -25,6 +26,8 @@ func (i QueryInstruction) String() string {
 		return "BatchSetValue"
 	case GetValue:
 		return "GetValue"
+	case GetRange:
+		return "GetRange"
 	case Load:
 		return "Load"
 	case Print:
@@ -47,18 +50,30 @@ type QueryHeader struct {
 }
 
 type QueryResponse struct {
-	Key     []byte
-	Value   []byte
-	Success bool
+	Key         []byte
+	Value       []byte
+	RangeValues [][][]byte
+	Success     bool
+}
+
+type KeyRange struct {
+	Start []byte
+	End   []byte
+	Limit int
+}
+
+func (kr *KeyRange) String() string {
+	return fmt.Sprintf("%s %s", kr.Start, kr.End)
 }
 
 type Query struct {
-	ctx    context.Context
-	done   chan QueryResponse
-	Header QueryHeader
-	Key    []byte
-	Value  []byte
-	Values []KeyValue
+	ctx      context.Context
+	done     chan QueryResponse
+	Header   QueryHeader
+	KeyRange KeyRange
+	Key      []byte
+	Value    []byte
+	Values   []KeyValue
 }
 
 func NewQuery(ctx context.Context, outbox chan QueryResponse) *Query {
@@ -70,9 +85,9 @@ func NewQuery(ctx context.Context, outbox chan QueryResponse) *Query {
 
 func (m *Query) String() string {
 	return fmt.Sprintf(
-		"%s %s %s %s %s",
+		"%s %s %s %s %s %s",
 		m.Header.FileName, m.Header.TableName,
-		m.Header.Inst, m.Key, m.Value,
+		m.Header.Inst, m.Key, m.Value, m.KeyRange.String(),
 	)
 }
 
@@ -104,7 +119,7 @@ func NewGetValueQuery(ctx context.Context, db []byte, key []byte) (*Query, chan 
 	query := NewQuery(ctx, done)
 	query.Header = QueryHeader{
 		TableName: db,
-		Inst:      GetValue,
+		Inst:      GetRange,
 	}
 	query.Key = key
 	return query, done

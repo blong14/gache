@@ -10,7 +10,6 @@ import (
 )
 
 type MemTable struct {
-	// flush      chan struct{}
 	readBuffer *gskl.SkipList
 }
 
@@ -32,6 +31,10 @@ func (m *MemTable) Get(k []byte) ([]byte, bool) {
 
 func (m *MemTable) Set(k, v []byte) error {
 	return m.buffer().Set(k, v)
+}
+
+func (m *MemTable) Scan(k, v []byte, f func(k, v []byte) bool) {
+	m.buffer().Scan(k, v, f)
 }
 
 func (m *MemTable) Flush(sstable *gstable.SSTable) error {

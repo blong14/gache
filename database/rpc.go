@@ -11,6 +11,7 @@ import (
 
 type GacheClient interface {
 	Get(ctx context.Context, t, k []byte) ([]byte, error)
+	Scan(ctx context.Context, t, s, e []byte) ([][][]byte, error)
 	Set(ctx context.Context, t, k, v []byte) error
 }
 
@@ -57,4 +58,22 @@ func (c *client) Set(ctx context.Context, table, key, value []byte) error {
 		return err
 	}
 	return nil
+}
+
+func (c *client) Scan(ctx context.Context, table, start, end []byte) ([][][]byte, error) {
+	var result *gdb.QueryResponse
+	err := c.database.QueryRowContext(
+		ctx,
+		"select * from :table where key between :start and :end;",
+		sql.Named("table", table),
+		sql.Named("start", start),
+		sql.Named("end", end),
+	).Scan(&result)
+	if err != nil {
+		return nil, err
+	}
+	if result.Success {
+		return result.RangeValues, nil
+	}
+	return nil, errors.New("missing value")
 }

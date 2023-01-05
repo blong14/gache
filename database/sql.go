@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strconv"
 	"strings"
 
 	gdb "github.com/blong14/gache/internal/db"
@@ -66,6 +67,18 @@ func newParseContext(scanner *bufio.Scanner, query *gdb.Query) *parseContext {
 				for scanner.Scan() {
 					switch scanner.Text() {
 					case "=":
+						if query.Header.Inst == gdb.GetRange {
+							query.Header.Inst = gdb.GetValue
+						}
+						continue
+					case "and":
+						if scanner.Scan() {
+							query.KeyRange.End = []byte(strings.TrimSuffix(scanner.Text(), ";"))
+						}
+					case "between":
+						if scanner.Scan() {
+							query.KeyRange.Start = []byte(scanner.Text())
+						}
 						continue
 					default:
 						key := strings.TrimSpace(scanner.Text())
@@ -80,7 +93,7 @@ func newParseContext(scanner *bufio.Scanner, query *gdb.Query) *parseContext {
 				return nil
 			},
 			"select": func(scanner *bufio.Scanner, query *gdb.Query) error {
-				query.Header.Inst = gdb.GetValue
+				query.Header.Inst = gdb.GetRange
 				if !scanner.Scan() {
 					return errors.New("missing token")
 				}
@@ -122,6 +135,17 @@ func newParseContext(scanner *bufio.Scanner, query *gdb.Query) *parseContext {
 						query.Value = []byte(value)
 					}
 					break
+				}
+				return nil
+			},
+			"limit": func(scanner *bufio.Scanner, query *gdb.Query) error {
+				if scanner.Scan() {
+					limit := strings.TrimSpace(scanner.Text())
+					l, err := strconv.Atoi(strings.TrimSuffix(limit, ";"))
+					if err != nil {
+						return err
+					}
+					query.KeyRange.Limit = l
 				}
 				return nil
 			},
