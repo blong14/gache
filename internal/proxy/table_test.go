@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/rand"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -23,6 +24,14 @@ func TestQueryProxy_Execute(t *testing.T) {
 	t.Cleanup(func() {
 		gproxy.StopProxy(ctx, qp)
 		cancel()
+		err = os.Remove(filepath.Join("testdata", "default-wal.dat"))
+		if err != nil {
+			t.Log(err)
+		}
+		err = os.Remove(filepath.Join("testdata", "default.dat"))
+		if err != nil {
+			t.Log(err)
+		}
 	})
 
 	start := time.Now()

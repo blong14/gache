@@ -3,7 +3,6 @@ package view
 import (
 	"context"
 	"fmt"
-	"log"
 
 	gdb "github.com/blong14/gache/internal/db"
 	gerrors "github.com/blong14/gache/internal/errors"
@@ -55,8 +54,9 @@ func (va *Table) Execute(ctx context.Context, query *gdb.Query) {
 			query.Done(gdb.QueryResponse{Success: false, RangeValues: values})
 			return
 		}
-		resp := gdb.QueryResponse{Success: true, RangeValues: values}
-		query.Done(resp)
+		query.Done(
+			gdb.QueryResponse{Success: true, RangeValues: values},
+		)
 	case gdb.SetValue:
 		if err := va.impl.Set(query.Key, query.Value); err != nil {
 			query.Done(gdb.QueryResponse{Success: false})
@@ -76,10 +76,11 @@ func (va *Table) Execute(ctx context.Context, query *gdb.Query) {
 				errs = gerrors.Append(errs, va.impl.Set(kv.Key, kv.Value))
 			}
 		}
-		if errs.ErrorOrNil() != nil {
-			log.Println(errs)
-		}
 		query.Done(gdb.QueryResponse{Success: true})
 	default:
 	}
+}
+
+func (va *Table) Stop() {
+	va.impl.Close()
 }

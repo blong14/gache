@@ -26,8 +26,8 @@ type Map interface {
 	Bytes() []byte
 	Len() int
 	Pos() int
-	Lock() error
-	Unlock() error
+	MLock() error
+	MUnlock() error
 	Append([]byte) (int, int, error)
 	Peek([]byte, int64, int64) (int, error)
 }
@@ -112,37 +112,27 @@ type mmap struct {
 	f                *os.File
 }
 
-func (m *mmap) Bytes() []byte {
-	m.RLock()
-	defer m.RUnlock()
-	return m.data
-}
-
-func (m *mmap) Len() int {
-	return m.len
-}
-
 func (m *mmap) Read(p []byte) (int, error) {
-	m.RLock()
-	defer m.RUnlock()
-	if m.ptr >= m.len {
+	if m.Pos() >= m.Len() {
 		return 0, io.EOF
 	}
-	n := copy(p, m.data[m.ptr:])
+	n := copy(p, m.data[m.Pos():])
+	m.Lock()
 	m.ptr += n
-	if n == m.len-m.ptr {
+	m.Unlock()
+	if n == m.Len()-m.Pos() {
 		return n, io.EOF
 	}
 	return n, nil
 }
 
 func (m *mmap) ReadAt(p []byte, off int64) (int, error) {
-	m.RLock()
-	defer m.RUnlock()
-	if int(off) >= m.len {
+	if int(off) >= m.Len() {
 		return 0, errors.New("offset is larger than the mmap []byte")
 	}
+	m.RLock()
 	n := copy(p, m.data[off:])
+	m.RUnlock()
 	if n < len(p) {
 		return n, errors.New("len(p) was greater than mmap[off:]")
 	}
@@ -150,12 +140,12 @@ func (m *mmap) ReadAt(p []byte, off int64) (int, error) {
 }
 
 func (m *mmap) Peek(p []byte, start, length int64) (int, error) {
-	m.RLock()
-	defer m.RUnlock()
-	if int(start) >= m.len || int(start+length) >= m.len {
+	if int(start) >= m.Len() || int(start+length) >= m.Len() {
 		return 0, errors.New("offset is larger than the mmap []byte")
 	}
+	m.RLock()
 	n := copy(p, m.data[start:start+length])
+	m.RUnlock()
 	if n < len(p) {
 		return n, errors.New("len(p) was greater than mmap[off:]")
 	}
@@ -163,31 +153,35 @@ func (m *mmap) Peek(p []byte, start, length int64) (int, error) {
 }
 
 func (m *mmap) Write(p []byte) (int, error) {
-	err := m.Lock()
+	err := m.MLock()
 	if err != nil {
 		return 0, fmt.Errorf("cannot lock memory: %w", err)
 	}
-	defer func() { _ = m.Unlock() }()
+	defer func() { _ = m.MUnlock() }()
 	if !m.write {
 		return 0, errors.New("cannot write to non-writeable mmap")
 	}
+	m.Lock()
 	n := copy(m.data[m.ptr:], p)
 	m.ptr += n
+	m.Unlock()
 	return n, nil
 }
 
 func (m *mmap) Append(p []byte) (int, int, error) {
-	err := m.Lock()
+	err := m.MLock()
 	if err != nil {
 		return 0, 0, fmt.Errorf("cannot lock memory: %w", err)
 	}
-	defer func() { _ = m.Unlock() }()
+	defer func() { _ = m.MUnlock() }()
 	if !m.write {
 		return 0, 0, errors.New("cannot write to non-writeable mmap")
 	}
-	offset := m.ptr
+	offset := m.Pos()
+	m.Lock()
 	n := copy(m.data[m.ptr:], p)
 	m.ptr += n
+	m.Unlock()
 	return n, offset, nil
 }
 
@@ -195,34 +189,52 @@ func (m *mmap) Seek(offset int64, whence int) (int64, error) {
 	if offset < 0 {
 		return 0, fmt.Errorf("cannot seek to a negative offset")
 	}
-	err := m.Lock()
+	err := m.MLock()
 	if err != nil {
 		return 0, fmt.Errorf("cannot lock memory: %w", err)
 	}
-	defer func() { _ = m.Unlock() }()
+	defer func() { _ = m.MUnlock() }()
 
 	switch whence {
 	case 0:
-		if offset < int64(m.len) {
+		if offset < int64(m.Len()) {
+			m.Lock()
 			m.ptr = int(offset)
-			return int64(m.ptr), nil
+			m.Unlock()
+			return int64(m.Pos()), nil
 		}
 		return 0, errors.New("offset goes beyond the data size")
 	case 1:
-		if m.ptr+int(offset) < m.len {
+		if m.Pos()+int(offset) < m.Len() {
+			m.Lock()
 			m.ptr += int(offset)
-			return int64(m.ptr), nil
+			m.Unlock()
+			return int64(m.Pos()), nil
 		}
 		return 0, errors.New("offset goes beyond the data size")
 	case 2:
-		if m.ptr-int(offset) > -1 {
+		if m.Pos()-int(offset) > -1 {
+			m.Lock()
 			m.ptr -= int(offset)
-			return int64(m.ptr), nil
+			m.Unlock()
+			return int64(m.Pos()), nil
 		}
 		return 0, errors.New("offset would set the offset as a negative number")
 	default:
 		return 0, errors.New("whence arg was not set to a valid value")
 	}
+}
+
+func (m *mmap) Bytes() []byte {
+	m.RLock()
+	defer m.RUnlock()
+	return m.data
+}
+
+func (m *mmap) Len() int {
+	m.RLock()
+	defer m.RUnlock()
+	return m.len
 }
 
 func (m *mmap) Pos() int {
@@ -231,13 +243,13 @@ func (m *mmap) Pos() int {
 	return m.ptr
 }
 
-func (m *mmap) Lock() error {
+func (m *mmap) MLock() error {
 	m.RLock()
 	defer m.RUnlock()
 	return syscall.Mlock(m.data)
 }
 
-func (m *mmap) Unlock() error {
+func (m *mmap) MUnlock() error {
 	m.RLock()
 	defer m.RUnlock()
 	return syscall.Munlock(m.data)

@@ -1,16 +1,19 @@
 package memtable
 
 import (
+	"errors"
 	"sync/atomic"
 	"unsafe"
 
 	gstable "github.com/blong14/gache/internal/db/sstable"
-	glog "github.com/blong14/gache/internal/logging"
 	gskl "github.com/blong14/gache/internal/map/xskiplist"
 )
 
+var ErrAllowedBytesExceeded = errors.New("memtable allowed bytes exceeded")
+
 type MemTable struct {
 	readBuffer *gskl.SkipList
+	bytes      uint64
 }
 
 func New() *MemTable {
@@ -30,7 +33,15 @@ func (m *MemTable) Get(k []byte) ([]byte, bool) {
 }
 
 func (m *MemTable) Set(k, v []byte) error {
-	return m.buffer().Set(k, v)
+	err := m.buffer().Set(k, v)
+	if err != nil {
+		return err
+	}
+	byts := atomic.AddUint64(&m.bytes, uint64(len(k)+len(v)))
+	if byts >= 4096*4096 {
+		return ErrAllowedBytesExceeded
+	}
+	return nil
 }
 
 func (m *MemTable) Scan(k, v []byte, f func(k, v []byte) bool) {
@@ -46,12 +57,11 @@ func (m *MemTable) Flush(sstable *gstable.SSTable) error {
 			unsafe.Pointer(reader),
 			unsafe.Pointer(nReader),
 		) {
-			spanStop := glog.TraceStart("flush")
+			atomic.StoreUint64(&m.bytes, 0)
 			reader.Range(func(k, v []byte) bool {
 				err := sstable.Set(k, v)
 				return err == nil
 			})
-			spanStop()
 			return nil
 		}
 		reader = m.buffer()
