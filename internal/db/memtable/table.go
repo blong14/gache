@@ -13,7 +13,6 @@ import (
 var ErrAllowedBytesExceeded = errors.New("memtable allowed bytes exceeded")
 
 type MemTable struct {
-	// flush      chan struct{}
 	readBuffer *gskl.SkipList
 	bytes      uint64
 }
@@ -34,11 +33,6 @@ func (m *MemTable) Get(k []byte) ([]byte, bool) {
 	return m.buffer().Get(k)
 }
 
-func (m *MemTable) Scan(start, end []byte) ([][][]byte, bool) {
-	out := make([][][]byte, 0)
-	return out, true
-}
-
 func (m *MemTable) Set(k, v []byte) error {
 	err := m.buffer().Set(k, v)
 	if err != nil {
@@ -49,6 +43,10 @@ func (m *MemTable) Set(k, v []byte) error {
 		return ErrAllowedBytesExceeded
 	}
 	return nil
+}
+
+func (m *MemTable) Scan(k, v []byte, f func(k, v []byte) bool) {
+	m.buffer().Scan(k, v, f)
 }
 
 func (m *MemTable) Flush(sstable *gstable.SSTable) error {

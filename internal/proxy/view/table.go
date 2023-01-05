@@ -27,9 +27,10 @@ func (va *Table) Execute(ctx context.Context, query *gdb.Query) {
 		var resp gdb.QueryResponse
 		if value, ok := va.impl.Get(query.Key); ok {
 			resp = gdb.QueryResponse{
-				Key:     query.Key,
-				Value:   value,
-				Success: true,
+				Key:         query.Key,
+				Value:       value,
+				Success:     true,
+				RangeValues: [][][]byte{{query.Key, value}},
 			}
 		}
 		query.Done(resp)
@@ -47,6 +48,15 @@ func (va *Table) Execute(ctx context.Context, query *gdb.Query) {
 			return true
 		})
 		query.Done(gdb.QueryResponse{Success: true})
+	case gdb.GetRange:
+		values, ok := va.impl.ScanWithLimit(
+			query.KeyRange.Start, query.KeyRange.End, query.KeyRange.Limit)
+		if !ok {
+			query.Done(gdb.QueryResponse{Success: false, RangeValues: values})
+			return
+		}
+		resp := gdb.QueryResponse{Success: true, RangeValues: values}
+		query.Done(resp)
 	case gdb.SetValue:
 		if err := va.impl.Set(query.Key, query.Value); err != nil {
 			query.Done(gdb.QueryResponse{Success: false})

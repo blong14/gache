@@ -21,13 +21,13 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
-          go-version: 1.18
+          go-version: 1.19
 
       - name: Build
         run: go build -v ./...
 
       - name: Test
-        run: go test -v ./...
+        run: go test -v -race ./...
 
       - name: Bench Concurrent
-        run: go test -cpu=1,2,4,8 -bench=BenchmarkConcurrent -run=XXX ./...
+        run: go test -cpu=1,2,4,8 -bench=BenchmarkSkiplist -run=XXX ./...

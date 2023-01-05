@@ -302,13 +302,14 @@ func BenchmarkSkiplist_AdversarialAlloc(b *testing.B) {
 	})
 }
 
-func BenchmarkConcurrent_Range(b *testing.B) {
+func BenchmarkSkiplist_Range(b *testing.B) {
 	const mapSize = 1 << 10
+	value := []byte("")
 	benchMap(b, bench{
 		setup: func(_ *testing.B, m *gskl.SkipList) {
 			for i := 0; i < mapSize; i++ {
-				v := strconv.Itoa(i)
-				err := m.Set([]byte(v), []byte(""))
+				key := []byte(strconv.Itoa(i))
+				err := m.Set(key, value)
 				if err != nil {
 					b.Fail()
 				}

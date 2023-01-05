@@ -2,6 +2,7 @@ package xskiplist_test
 
 import (
 	"fmt"
+	"reflect"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -52,6 +53,7 @@ func TestCount(t *testing.T) {
 			}
 		},
 	})
+
 }
 
 func TestGetAndSet(t *testing.T) {
@@ -72,6 +74,7 @@ func TestGetAndSet(t *testing.T) {
 				}(i)
 			}
 			wg.Wait()
+			t.Logf("%s", time.Since(start))
 			for i := 0; i < count; i++ {
 				wg.Add(1)
 				go func(indx int) {
@@ -87,7 +90,57 @@ func TestGetAndSet(t *testing.T) {
 			t.Logf("%s", time.Since(start))
 		},
 	})
+}
 
+func TestRange(t *testing.T) {
+	t.Skip("skipping...")
+	expected := [][]byte{[]byte("first"), []byte("second"), []byte("third")}
+	testMap(t, "count", test{
+		setup: func(t *testing.T, m *gskl.SkipList) {
+			for _, i := range expected {
+				err := m.Set(i, i)
+				if err != nil {
+					t.Fail()
+				}
+			}
+		},
+		run: func(t *testing.T, m *gskl.SkipList) {
+			actual := make([][]byte, 0)
+			m.Range(func(k, _ []byte) bool {
+				actual = append(actual, k)
+				return true
+			})
+			if !reflect.DeepEqual(actual, expected) {
+				t.Errorf("w %v g %v", expected, actual)
+			}
+		},
+	})
+}
+
+func TestScan(t *testing.T) {
+	t.Skip("skipping...")
+	expected := [][]byte{[]byte("first"), []byte("second"), []byte("third"), []byte("fourth")}
+	testMap(t, "count", test{
+		setup: func(t *testing.T, m *gskl.SkipList) {
+			for _, i := range expected {
+				err := m.Set(i, i)
+				if err != nil {
+					t.Fail()
+				}
+			}
+		},
+		run: func(t *testing.T, m *gskl.SkipList) {
+			actual := make([][]byte, 0)
+			m.Scan(expected[1], expected[3], func(k, _ []byte) bool {
+				t.Logf("%s", k)
+				actual = append(actual, k)
+				return true
+			})
+			if !reflect.DeepEqual(actual, expected) {
+				t.Errorf("w %v g %v", expected, actual)
+			}
+		},
+	})
 }
 
 type bench struct {
@@ -249,6 +302,27 @@ func BenchmarkSkiplist_AdversarialAlloc(b *testing.B) {
 					loadsSinceStore = 0
 					stores++
 				}
+			}
+		},
+	})
+}
+
+func BenchmarkSkiplist_Range(b *testing.B) {
+	const mapSize = 1 << 10
+	value := []byte("")
+	benchMap(b, bench{
+		setup: func(_ *testing.B, m *gskl.SkipList) {
+			for i := 0; i < mapSize; i++ {
+				key := []byte(strconv.Itoa(i))
+				err := m.Set(key, value)
+				if err != nil {
+					b.Fail()
+				}
+			}
+		},
+		perG: func(b *testing.B, pb *testing.PB, i int, m *gskl.SkipList) {
+			for ; pb.Next(); i++ {
+				m.Range(func(_, _ []byte) bool { return true })
 			}
 		},
 	})

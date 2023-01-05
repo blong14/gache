@@ -16,4 +16,5 @@
 # Directories
 .idea
 bin
+data/
 venv/

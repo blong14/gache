@@ -1,4 +1,4 @@
-GO=~/sdk/go1.18/bin/go
+GO=~/sdk/go1.19/bin/go
 
 bench: clean
 	$(GO) test -cpu=1,4,8 -bench=BenchmarkSkiplist -run=XXX ./...
@@ -25,4 +25,3 @@ run: lint
 
 test:
 	$(GO) test -race -cpu=8 -parallel=8 ./...
-
