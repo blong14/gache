@@ -14,6 +14,7 @@ type Table interface {
 	Get(k []byte) ([]byte, bool)
 	Set(k, v []byte) error
 	Scan(s, e []byte) ([][][]byte, bool)
+	ScanWithLimit(s, e []byte, l int) ([][][]byte, bool)
 	Range(func(k, v []byte) bool)
 	Print()
 	Connect() error
@@ -99,6 +100,9 @@ func (db *fileDatabase) Range(fnc func(k, v []byte) bool) {}
 func (db *fileDatabase) Scan(_, _ []byte) ([][][]byte, bool) {
 	return nil, false
 }
+func (db *fileDatabase) ScanWithLimit(_, _ []byte, l int) ([][][]byte, bool) {
+	return nil, false
+}
 
 type inMemoryDatabase struct {
 	name     string
@@ -119,6 +123,19 @@ func (db *inMemoryDatabase) Scan(s, e []byte) ([][][]byte, bool) {
 	db.memtable.Scan(s, e, func(k, v []byte) bool {
 		out = append(out, [][]byte{k, v})
 		return true
+	})
+	return out, true
+}
+
+func (db *inMemoryDatabase) ScanWithLimit(s, e []byte, limit int) ([][][]byte, bool) {
+	var total int
+	out := make([][][]byte, 0)
+	db.memtable.Scan(s, e, func(k, v []byte) bool {
+		if total <= limit {
+			out = append(out, [][]byte{k, v})
+			total++
+		}
+		return total <= limit
 	})
 	return out, true
 }

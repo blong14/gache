@@ -59,6 +59,7 @@ type QueryResponse struct {
 type KeyRange struct {
 	Start []byte
 	End   []byte
+	Limit int
 }
 
 func (kr *KeyRange) String() string {

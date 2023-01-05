@@ -15,6 +15,14 @@ func TestParse(t *testing.T) {
 				TableName: []byte("default"),
 			},
 		},
+		"select * from default limit 10;": {
+			Header: gdb.QueryHeader{
+				Inst:      gdb.GetRange,
+				TableName: []byte("default"),
+			},
+			KeyRange: gdb.KeyRange{Limit: 10},
+		},
+
 		"select * from default where key = __key__;": {
 			Header: gdb.QueryHeader{
 				Inst:      gdb.GetValue,

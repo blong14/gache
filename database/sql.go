@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strconv"
 	"strings"
 
 	gdb "github.com/blong14/gache/internal/db"
@@ -134,6 +135,17 @@ func newParseContext(scanner *bufio.Scanner, query *gdb.Query) *parseContext {
 						query.Value = []byte(value)
 					}
 					break
+				}
+				return nil
+			},
+			"limit": func(scanner *bufio.Scanner, query *gdb.Query) error {
+				if scanner.Scan() {
+					limit := strings.TrimSpace(scanner.Text())
+					l, err := strconv.Atoi(strings.TrimSuffix(limit, ";"))
+					if err != nil {
+						return err
+					}
+					query.KeyRange.Limit = l
 				}
 				return nil
 			},

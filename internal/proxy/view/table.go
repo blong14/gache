@@ -49,7 +49,8 @@ func (va *Table) Execute(ctx context.Context, query *gdb.Query) {
 		})
 		query.Done(gdb.QueryResponse{Success: true})
 	case gdb.GetRange:
-		values, ok := va.impl.Scan(query.KeyRange.Start, query.KeyRange.End)
+		values, ok := va.impl.ScanWithLimit(
+			query.KeyRange.Start, query.KeyRange.End, query.KeyRange.Limit)
 		if !ok {
 			query.Done(gdb.QueryResponse{Success: false, RangeValues: values})
 			return
