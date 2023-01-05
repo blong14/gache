@@ -26,6 +26,8 @@ func (i QueryInstruction) String() string {
 		return "BatchSetValue"
 	case GetValue:
 		return "GetValue"
+	case GetRange:
+		return "GetRange"
 	case Load:
 		return "Load"
 	case Print:
@@ -116,7 +118,7 @@ func NewGetValueQuery(ctx context.Context, db []byte, key []byte) (*Query, chan 
 	query := NewQuery(ctx, done)
 	query.Header = QueryHeader{
 		TableName: db,
-		Inst:      GetValue,
+		Inst:      GetRange,
 	}
 	query.Key = key
 	return query, done

@@ -392,6 +392,7 @@ func (sk *SkipList) Range(f func(k, v []byte) bool) {
 }
 
 type iter struct {
+	sk           *SkipList
 	lastReturned *node
 	nxt          *node
 	start        *uint64
@@ -399,8 +400,8 @@ type iter struct {
 }
 
 func newIter(sk *SkipList, s, e *uint64) *iter {
-	i := &iter{start: s, end: e}
-	h := sk.top()
+	i := &iter{sk: sk, start: s, end: e}
+	h := i.sk.top()
 	if h != nil {
 		n := h.Node()
 		i.advance(n)
@@ -418,16 +419,7 @@ func (i *iter) advance(b *node) {
 		}
 	}
 	if i.start != nil && n != nil && *i.start > n.hash {
-		b = n
-		n = b.Next()
-		for n != nil {
-			if *i.start == n.hash {
-				break
-			} else if *i.start > n.hash {
-				b = n
-				n = b.Next()
-			}
-		}
+		n = i.sk.findNode(*i.start)
 	}
 	i.nxt = n
 }
@@ -446,12 +438,21 @@ func (i *iter) next() *node {
 }
 
 func (sk *SkipList) Scan(start, end []byte, f func(k, v []byte) bool) {
-	s := hash(start)
-	e := hash(end)
-	itr := newIter(sk, &s, &e)
-	for itr.hasNext() {
-		n := itr.next()
+	var s *uint64
+	if start != nil {
+		h := hash(start)
+		s = &h
+	}
+	var e *uint64
+	if end != nil {
+		h := hash(end)
+		e = &h
+	}
+	itr := newIter(sk, s, e)
+	var n *node
+	for n = itr.next(); n != nil; {
 		f(n.key, n.val)
+		n = itr.next()
 	}
 }
 

@@ -13,7 +13,7 @@ import (
 type Table interface {
 	Get(k []byte) ([]byte, bool)
 	Set(k, v []byte) error
-	Scan(s, e []byte, f func(k, v []byte) bool) ([]byte, bool)
+	Scan(s, e []byte) ([][][]byte, bool)
 	Range(func(k, v []byte) bool)
 	Print()
 	Connect() error
@@ -96,7 +96,7 @@ func (db *fileDatabase) Close() {
 
 func (db *fileDatabase) Print()                           {}
 func (db *fileDatabase) Range(fnc func(k, v []byte) bool) {}
-func (db *fileDatabase) Scan(_, _ []byte, fnc func(k, v []byte) bool) ([]byte, bool) {
+func (db *fileDatabase) Scan(_, _ []byte) ([][][]byte, bool) {
 	return nil, false
 }
 
@@ -114,9 +114,13 @@ func (db *inMemoryDatabase) Set(k, v []byte) error {
 	return db.memtable.Set(k, v)
 }
 
-func (db *inMemoryDatabase) Scan(s, e []byte, fnc func(k, v []byte) bool) ([]byte, bool) {
-	value, ok := db.memtable.Get(s)
-	return value, ok
+func (db *inMemoryDatabase) Scan(s, e []byte) ([][][]byte, bool) {
+	out := make([][][]byte, 0)
+	db.memtable.Scan(s, e, func(k, v []byte) bool {
+		out = append(out, [][]byte{k, v})
+		return true
+	})
+	return out, true
 }
 
 func (db *inMemoryDatabase) Close()                           {}

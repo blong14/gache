@@ -66,22 +66,19 @@ func newParseContext(scanner *bufio.Scanner, query *gdb.Query) *parseContext {
 				for scanner.Scan() {
 					switch scanner.Text() {
 					case "=":
+						if query.Header.Inst == gdb.GetRange {
+							query.Header.Inst = gdb.GetValue
+						}
 						continue
+					case "and":
+						if scanner.Scan() {
+							query.KeyRange.End = []byte(strings.TrimSuffix(scanner.Text(), ";"))
+						}
 					case "between":
 						if scanner.Scan() {
-							kr := gdb.KeyRange{}
-							kr.Start = []byte(scanner.Text())
-							for scanner.Scan() {
-								switch scanner.Text() {
-								case "and":
-									continue
-								default:
-									kr.End = []byte(strings.TrimSuffix(scanner.Text(), ";"))
-								}
-							}
-							query.KeyRange = kr
+							query.KeyRange.Start = []byte(scanner.Text())
 						}
-						return nil
+						continue
 					default:
 						key := strings.TrimSpace(scanner.Text())
 						if strings.HasSuffix(key, ";") {
@@ -89,7 +86,6 @@ func newParseContext(scanner *bufio.Scanner, query *gdb.Query) *parseContext {
 							return nil
 						}
 						query.Key = []byte(strings.TrimSuffix(key, ","))
-						query.Header.Inst = gdb.GetValue
 					}
 					break
 				}

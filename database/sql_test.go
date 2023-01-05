@@ -9,32 +9,17 @@ import (
 
 func TestParse(t *testing.T) {
 	tests := map[string]*gdb.Query{
-		"select value from default where key = __key__;": {
+		"select * from default;": {
+			Header: gdb.QueryHeader{
+				Inst:      gdb.GetRange,
+				TableName: []byte("default"),
+			},
+		},
+		"select * from default where key = __key__;": {
 			Header: gdb.QueryHeader{
 				Inst:      gdb.GetValue,
 				TableName: []byte("default")},
 			Key: []byte("__key__"),
-		},
-		"insert into default set key = _key, value = _value;": {
-			Header: gdb.QueryHeader{
-				Inst:      gdb.SetValue,
-				TableName: []byte("default"),
-			},
-			Key:   []byte("_key"),
-			Value: []byte("_value"),
-		},
-		"copy default from ./persons.csv;": {
-			Header: gdb.QueryHeader{
-				Inst:      gdb.Load,
-				TableName: []byte("default"),
-				FileName:  []byte("./persons.csv"),
-			},
-		},
-		"create table default;": {
-			Header: gdb.QueryHeader{
-				Inst:      gdb.AddTable,
-				TableName: []byte("default"),
-			},
 		},
 		"select * from default where key between aaa and ddd;": {
 			Header: gdb.QueryHeader{
@@ -43,9 +28,27 @@ func TestParse(t *testing.T) {
 			},
 			KeyRange: gdb.KeyRange{Start: []byte("aaa"), End: []byte("ddd")},
 		},
-		"select * from default;": {
+
+		"insert into default set key = _key, value = _value;": {
 			Header: gdb.QueryHeader{
-				Inst:      gdb.GetRange,
+				Inst:      gdb.SetValue,
+				TableName: []byte("default"),
+			},
+			Key:   []byte("_key"),
+			Value: []byte("_value"),
+		},
+
+		"copy default from ./persons.csv;": {
+			Header: gdb.QueryHeader{
+				Inst:      gdb.Load,
+				TableName: []byte("default"),
+				FileName:  []byte("./persons.csv"),
+			},
+		},
+
+		"create table default;": {
+			Header: gdb.QueryHeader{
+				Inst:      gdb.AddTable,
 				TableName: []byte("default"),
 			},
 		},

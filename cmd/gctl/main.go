@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -55,6 +56,8 @@ func accept(ctx context.Context, db *sql.DB) {
 			return
 		default:
 		}
+		b := strings.Builder{}
+		b.Reset()
 		start := time.Now()
 		var result *gache.QueryResponse
 		if err := db.QueryRowContext(ctx, scanner.Text()).Scan(&result); err != nil {
@@ -62,11 +65,13 @@ func accept(ctx context.Context, db *sql.DB) {
 			fmt.Print("\n% ")
 			continue
 		}
-		fmt.Print("%\tkey\t\tvalue\n")
+		b.WriteString("%\tkey\t\tvalue\n")
 		if result.Success {
-			fmt.Printf("1.\t%s\t\t%s\n", string(result.Key), result.Value)
+			for i, r := range result.RangeValues {
+				b.WriteString(fmt.Sprintf("%d.\t%s\t\t%s\n", i, r[0], r[1]))
+			}
 		}
-		fmt.Printf("[%s]", time.Since(start))
-		fmt.Print("\n% ")
+		b.WriteString(fmt.Sprintf("[%s]\n%% ", time.Since(start)))
+		fmt.Print(b.String())
 	}
 }

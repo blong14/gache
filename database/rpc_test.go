@@ -44,3 +44,30 @@ func TestClient(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestScanClient(t *testing.T) {
+	ctx := context.Background()
+	db := MustGetDB()
+	c := gdb.New(nil, db)
+	table, start, end := []byte("default"), []byte("__key__"), []byte("__key1__")
+	if err := c.Set(ctx, table, start, start); err != nil {
+		t.Error(err)
+	}
+	if err := c.Set(ctx, table, end, end); err != nil {
+		t.Error(err)
+	}
+	if err := c.Set(ctx, table, []byte("__value__"), []byte("__value__")); err != nil {
+		t.Error(err)
+	}
+	actual, err := c.Scan(ctx, table, []byte("__value__"), end)
+	if err != nil {
+		t.Error(err)
+	}
+	if len(actual) == 0 {
+		t.Error("missing values")
+	}
+	err = db.Close()
+	if err != nil {
+		t.Error(err)
+	}
+}

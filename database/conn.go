@@ -91,6 +91,10 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 		switch arg.Name {
 		case "table":
 			q.Header.TableName = valueOrKey
+		case "start":
+			q.KeyRange.Start = valueOrKey
+		case "end":
+			q.KeyRange.End = valueOrKey
 		case "key":
 			q.Key = valueOrKey
 		case "value":
@@ -103,9 +107,10 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 	resp := q.GetResponse()
 	return &rows{
 		next: &QueryResponse{
-			Key:     resp.Key,
-			Value:   resp.Value,
-			Success: resp.Success,
+			Key:         resp.Key,
+			Value:       resp.Value,
+			RangeValues: resp.RangeValues,
+			Success:     resp.Success,
 		},
 	}, nil
 }
