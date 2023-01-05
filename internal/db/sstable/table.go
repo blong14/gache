@@ -1,6 +1,7 @@
 package sstable
 
 import (
+	"bufio"
 	"bytes"
 	"log"
 	"os"
@@ -11,8 +12,11 @@ import (
 )
 
 type SSTable struct {
+	mtx   sync.Mutex
+	buf   *bufio.Writer
 	index *sync.Map
 	data  gmmap.Map
+	ptr   int
 }
 
 func New(f *os.File) *SSTable {
@@ -35,9 +39,13 @@ func New(f *os.File) *SSTable {
 	if err != nil {
 		panic(err)
 	}
+
+	_, _ = f.Seek(gfile.DataStartIndex, 0)
+
 	return &SSTable{
 		index: &sync.Map{},
 		data:  mmap,
+		buf:   bufio.NewWriter(f),
 	}
 }
 
@@ -83,16 +91,17 @@ func (ss *SSTable) Set(k, v []byte) error {
 	buf.Write([]byte("\n"))
 	encoded := make([]byte, buf.Len())
 	copy(encoded, buf.Bytes())
-
-	//row, err := gfile.EncodeBlock(encoded)
-	//if err != nil {
-	//	return err
-	//}
-	len_, offset, err := ss.data.Append(encoded)
+	row, err := gfile.EncodeBlock(encoded)
 	if err != nil {
 		return err
 	}
-	ss.index.Store(string(k), &indexValue{offset: int64(offset), length: int64(len_)})
+	ss.mtx.Lock()
+	offset := ss.ptr
+	_len, _ := ss.buf.Write(row)
+	_ = ss.buf.Flush()
+	ss.ptr += _len
+	ss.mtx.Unlock()
+	ss.index.Store(string(k), &indexValue{offset: int64(offset), length: int64(_len)})
 	return nil
 }
 
@@ -108,5 +117,4 @@ func (ss *SSTable) Free() {
 	if err := ss.data.Close(); err != nil {
 		log.Println(err)
 	}
-	ss.index = nil
 }

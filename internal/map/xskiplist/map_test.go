@@ -118,9 +118,9 @@ func TestRange(t *testing.T) {
 }
 
 func TestScan(t *testing.T) {
-	t.Skip("skipping...")
-	expected := [][]byte{[]byte("first"), []byte("second"), []byte("third"), []byte("fourth")}
-	testMap(t, "count", test{
+	// t.Skip("skipping...")
+	expected := [][]byte{[]byte("aaaa"), []byte("bbbb"), []byte("cccc"), []byte("dddd"), []byte("eeee")}
+	testMap(t, "scan", test{
 		setup: func(t *testing.T, m *gskl.SkipList) {
 			for _, i := range expected {
 				err := m.Set(i, i)
@@ -131,8 +131,15 @@ func TestScan(t *testing.T) {
 		},
 		run: func(t *testing.T, m *gskl.SkipList) {
 			actual := make([][]byte, 0)
-			m.Scan(expected[1], expected[3], func(k, _ []byte) bool {
-				t.Logf("%s", k)
+			m.Scan(expected[1], expected[4], func(k, _ []byte) bool {
+				actual = append(actual, k)
+				return true
+			})
+			if !reflect.DeepEqual(actual, expected[1:]) {
+				t.Errorf("w %v g %v", expected[1:], actual)
+			}
+			actual = make([][]byte, 0)
+			m.Scan(expected[0], nil, func(k, _ []byte) bool {
 				actual = append(actual, k)
 				return true
 			})

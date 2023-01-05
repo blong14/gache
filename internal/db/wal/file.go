@@ -15,6 +15,19 @@ type WAL struct {
 }
 
 func New(f *os.File) *WAL {
+	s, err := f.Stat()
+	if err != nil {
+		panic(err)
+	}
+	size := s.Size()
+	if size == 0 {
+		buf := bytes.NewBuffer(nil)
+		buf.Write(gfile.DatFileHeader(f.Name()))
+		_, err = f.Write(buf.Bytes())
+		if err != nil {
+			panic(err)
+		}
+	}
 	return &WAL{
 		buf: bufio.NewWriter(f),
 	}
@@ -38,7 +51,7 @@ func (ss *WAL) Set(k, v []byte) error {
 	}
 	ss.mtx.Lock()
 	_, _ = ss.buf.Write(row)
-	ss.mtx.Unlock()
 	_ = ss.buf.Flush()
+	ss.mtx.Unlock()
 	return nil
 }

@@ -17,6 +17,15 @@ func init() {
 	pageSize = os.Getpagesize()
 }
 
+func DatFileHeader(file string) []byte {
+	return []byte(fmt.Sprintf("begin 0755 %s\n", file))
+
+}
+
+func DatFileFooter() []byte {
+	return []byte("\nend\n")
+}
+
 func NewDatFile(dir, fileName string) (*os.File, error) {
 	file := fmt.Sprintf("%s.dat", fileName)
 	p := path.Join(dir, file)
@@ -31,11 +40,10 @@ func NewDatFile(dir, fileName string) (*os.File, error) {
 	size := s.Size()
 	if size == 0 {
 		// memory ballast
-		out := []byte{}
-		buf := bytes.NewBuffer(out)
-		buf.Write([]byte(fmt.Sprintf("begin 0755 %s\n", file)))
+		buf := bytes.NewBuffer(nil)
+		buf.Write(DatFileHeader(file))
 		buf.Write(make([]byte, pageSize*pageSize*4))
-		buf.Write([]byte("\nend\n"))
+		buf.Write(DatFileFooter())
 		_, err = f.Write(buf.Bytes())
 		if err != nil {
 			return nil, err

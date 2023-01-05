@@ -103,10 +103,7 @@ func (db *fileDatabase) Set(k, v []byte) error {
 		if errors.Is(err, gmtable.ErrAllowedBytesExceeded) {
 			go func() {
 				if db.sstable != nil {
-					err := db.memtable.Flush(db.sstable)
-					if err != nil {
-						log.Println(err)
-					}
+					_ = db.memtable.Flush(db.sstable)
 				}
 			}()
 		} else {
@@ -128,11 +125,27 @@ func (db *fileDatabase) Close() {
 
 func (db *fileDatabase) Print()                           {}
 func (db *fileDatabase) Range(fnc func(k, v []byte) bool) {}
-func (db *fileDatabase) Scan(_, _ []byte) ([][][]byte, bool) {
-	return nil, false
+
+func (db *fileDatabase) Scan(s, e []byte) ([][][]byte, bool) {
+	out := make([][][]byte, 0)
+	db.memtable.Scan(s, e, func(k, v []byte) bool {
+		out = append(out, [][]byte{k, v})
+		return true
+	})
+	return out, true
+
 }
-func (db *fileDatabase) ScanWithLimit(_, _ []byte, l int) ([][][]byte, bool) {
-	return nil, false
+
+func (db *fileDatabase) ScanWithLimit(s, e []byte, limit int) ([][][]byte, bool) {
+	out := make([][][]byte, 0, limit)
+	db.memtable.Scan(s, e, func(k, v []byte) bool {
+		out = append(out, [][]byte{k, v})
+		if limit > 0 && len(out) >= limit {
+			return false
+		}
+		return true
+	})
+	return out, true
 }
 
 type inMemoryDatabase struct {

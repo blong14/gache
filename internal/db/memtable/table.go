@@ -1,7 +1,6 @@
 package memtable
 
 import (
-	"bytes"
 	"errors"
 	"sync/atomic"
 	"unsafe"
@@ -39,7 +38,7 @@ func (m *MemTable) Set(k, v []byte) error {
 		return err
 	}
 	byts := atomic.AddUint64(&m.bytes, uint64(len(k)+len(v)))
-	if byts >= 4096 {
+	if byts >= 4096*4096 {
 		return ErrAllowedBytesExceeded
 	}
 	return nil
@@ -59,19 +58,10 @@ func (m *MemTable) Flush(sstable *gstable.SSTable) error {
 			unsafe.Pointer(nReader),
 		) {
 			atomic.StoreUint64(&m.bytes, 0)
-			buf := bytes.NewBuffer(nil)
-			buf.Reset()
 			reader.Range(func(k, v []byte) bool {
-				buf.Write(k)
-				buf.Write([]byte("::"))
-				buf.Write(v)
-				buf.Write([]byte("\n"))
-				return true
+				err := sstable.Set(k, v)
+				return err == nil
 			})
-			err := sstable.XSet(buf)
-			if err != nil {
-				return err
-			}
 			return nil
 		}
 		reader = m.buffer()
