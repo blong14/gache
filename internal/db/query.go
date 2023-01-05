@@ -87,7 +87,7 @@ func (m *Query) String() string {
 	return fmt.Sprintf(
 		"%s %s %s %s %s %s",
 		m.Header.FileName, m.Header.TableName,
-		m.Header.Inst, m.Key, m.Value, m.KeyRange,
+		m.Header.Inst, m.Key, m.Value, m.KeyRange.String(),
 	)
 }
 

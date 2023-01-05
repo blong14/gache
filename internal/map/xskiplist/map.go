@@ -449,10 +449,8 @@ func (sk *SkipList) Scan(start, end []byte, f func(k, v []byte) bool) {
 		e = &h
 	}
 	itr := newIter(sk, s, e)
-	var n *node
-	for n = itr.next(); n != nil; {
+	for n := itr.next(); itr.hasNext(); n = itr.next() {
 		f(n.key, n.val)
-		n = itr.next()
 	}
 }
 
