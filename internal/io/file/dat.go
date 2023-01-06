@@ -152,17 +152,42 @@ func Encode(data []byte, filename, mode string) ([]byte, error) {
 
 var pool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(nil) }}
 
+type Arena []byte
+
+var mtx sync.Mutex
+
+func (na *Arena) Get(len_ int) []byte {
+	mtx.Lock()
+	defer mtx.Unlock()
+	if len(*na) == 0 {
+		*na = make([]byte, 4096*4096*4)
+	}
+	offset := (len(*na) - 1) - len_
+	if offset <= 0 {
+		*na = make([]byte, len(*na)+len_)
+		offset = (len(*na) - 1) - len_
+	}
+	if offset == -2075 {
+		fmt.Println("hellow")
+	}
+	n := (*na)[offset : len(*na)-1]
+	*na = (*na)[:offset]
+	return n
+}
+
+var byteArena = make(Arena, 4096*4096*4)
+
 // EncodeBlock encodes data in raw uuencoded format
 func EncodeBlock(data []byte) ([]byte, error) {
 	out := pool.Get().(*bytes.Buffer)
 	defer pool.Put(out)
 	out.Reset()
 	out.WriteByte(byte(len(data)))
-	input := make([]byte, base64.StdEncoding.EncodedLen(len(data)))
-	encoding.Encode(input, data)
-	out.Write(input)
+	// input := byteArena.Get(base64.StdEncoding.EncodedLen(len(data)))
+	// encoding.Encode(input, data)
+	out.Write(data)
 	out.WriteByte('\n')
-	o := make([]byte, out.Len())
+	o := byteArena.Get(out.Len())
 	copy(o, out.Bytes())
 	return o, nil
 }

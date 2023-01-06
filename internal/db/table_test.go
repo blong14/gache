@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 
 	gdb "github.com/blong14/gache/internal/db"
-	glog "github.com/blong14/gache/internal/logging"
 )
 
 func tearDown(t *testing.T) {
@@ -22,41 +23,50 @@ func tearDown(t *testing.T) {
 }
 
 func TestFileDB(t *testing.T) {
-	t.Skip("skipping...")
+	// t.Skip("skipping...")
 	t.Cleanup(func() {
 		tearDown(t)
 	})
-	db := gdb.New(
-		&gdb.TableOpts{
-			DataDir:   []byte("testdata"),
-			TableName: []byte("default"),
-			InMemory:  false,
-			WalMode:   true,
-		},
-	)
+	start := time.Now()
+	opts := &gdb.TableOpts{
+		DataDir:   []byte("testdata"),
+		TableName: []byte("default"),
+		InMemory:  false,
+		WalMode:   true,
+	}
+	db := gdb.New(opts)
 
 	// given
-	count := 50
-	done := make(chan struct{})
-	go func() {
-		for i := 0; i < count; i++ {
+	var wg sync.WaitGroup
+	count := 50_000
+	for i := 0; i < count; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
 			err := db.Set(
-				[]byte(fmt.Sprintf("key_%d", i)), []byte(fmt.Sprintf("value__%d", i)))
+				[]byte(fmt.Sprintf("key_%d", idx)), []byte(fmt.Sprintf("value__%d", idx)))
 			if err != nil {
 				t.Error(err)
 			}
-		}
-		close(done)
-	}()
+		}(i)
+	}
+	wg.Wait()
 
 	// when
-	<-done
 	for i := 0; i < count; i++ {
-		if _, ok := db.Get([]byte(fmt.Sprintf("key_%d", i))); !ok {
-			t.Errorf("missing rawKey %d", i)
-		}
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			if _, ok := db.Get([]byte(fmt.Sprintf("key_%d", idx))); !ok {
+				t.Errorf("missing rawKey %d", idx)
+			}
+		}(i)
 	}
+	wg.Wait()
 
+	t.Logf("%s", time.Since(start))
+
+	start = time.Now()
 	values, ok := db.Scan([]byte("key_45"), []byte("key_48"))
 	if !ok {
 		t.Errorf("missing keys %v", values)
@@ -65,10 +75,13 @@ func TestFileDB(t *testing.T) {
 		t.Errorf("missing keys %v", values)
 	}
 
+	t.Logf("%s %+v", time.Since(start), values)
+
 	db.Close()
 }
 
 func TestInMemoryDB(t *testing.T) {
+	start := time.Now()
 	opts := &gdb.TableOpts{
 		DataDir:   []byte("testdata"),
 		TableName: []byte("default"),
@@ -78,27 +91,34 @@ func TestInMemoryDB(t *testing.T) {
 	db := gdb.New(opts)
 
 	// given
-	count := 50
-	done := make(chan struct{})
-	go func() {
-		stop := glog.TraceStart("set")
-		for i := 0; i < count; i++ {
+	var wg sync.WaitGroup
+	count := 50_000
+	for i := 0; i < count; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
 			err := db.Set(
-				[]byte(fmt.Sprintf("key_%d", i)), []byte(fmt.Sprintf("value__%d", i)))
+				[]byte(fmt.Sprintf("key_%d", idx)), []byte(fmt.Sprintf("value__%d", idx)))
 			if err != nil {
 				t.Error(err)
 			}
-		}
-		stop()
-		close(done)
-	}()
+		}(i)
+	}
+	wg.Wait()
 
 	// when
-	<-done
 	for i := 0; i < count; i++ {
-		if _, ok := db.Get([]byte(fmt.Sprintf("key_%d", i))); !ok {
-			t.Errorf("missing rawKey %d", i)
-		}
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			if _, ok := db.Get([]byte(fmt.Sprintf("key_%d", idx))); !ok {
+				t.Errorf("missing rawKey %d", idx)
+			}
+		}(i)
 	}
+	wg.Wait()
+
+	t.Logf("%s", time.Since(start))
 	db.Close()
+
 }

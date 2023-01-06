@@ -7,7 +7,7 @@ import (
 	"os"
 	"sync"
 
-	gmmap "github.com/blong14/gache/internal/db/sstable/arena"
+	garena "github.com/blong14/gache/internal/db/arena"
 	gfile "github.com/blong14/gache/internal/io/file"
 )
 
@@ -15,7 +15,7 @@ type SSTable struct {
 	mtx   sync.Mutex
 	buf   *bufio.Writer
 	index *sync.Map
-	data  gmmap.Map
+	data  gfile.Map
 	ptr   int
 }
 
@@ -25,12 +25,12 @@ func New(f *os.File) *SSTable {
 		panic(err)
 	}
 	len_ := s.Size() + gfile.DataEndIndex
-	mmap, err := gmmap.NewMap(
+	mmap, err := gfile.NewMap(
 		f,
-		gmmap.Prot(gmmap.Read),
-		gmmap.Prot(gmmap.Write),
-		gmmap.Flag(gmmap.Shared),
-		gmmap.Length(int(len_)),
+		gfile.Prot(gfile.Read),
+		gfile.Prot(gfile.Write),
+		gfile.Flag(gfile.Shared),
+		gfile.Length(int(len_)),
 	)
 	if err != nil {
 		panic(err)
@@ -39,9 +39,10 @@ func New(f *os.File) *SSTable {
 	if err != nil {
 		panic(err)
 	}
-
-	_, _ = f.Seek(gfile.DataStartIndex, 0)
-
+	_, err = f.Seek(gfile.DataStartIndex, 0)
+	if err != nil {
+		panic(err)
+	}
 	return &SSTable{
 		index: &sync.Map{},
 		data:  mmap,
@@ -81,6 +82,8 @@ func (ss *SSTable) Get(k []byte) ([]byte, bool) {
 
 var writePool = sync.Pool{New: func() any { return bytes.NewBuffer(nil) }}
 
+var byteArena = make(garena.ByteArena, 0)
+
 func (ss *SSTable) Set(k, v []byte) error {
 	buf := writePool.Get().(*bytes.Buffer)
 	defer writePool.Put(buf)
@@ -89,15 +92,15 @@ func (ss *SSTable) Set(k, v []byte) error {
 	buf.Write([]byte("::"))
 	buf.Write(v)
 	buf.Write([]byte("\n"))
-	encoded := make([]byte, buf.Len())
+	encoded := byteArena.Allocate(buf.Len())
 	copy(encoded, buf.Bytes())
-	row, err := gfile.EncodeBlock(encoded)
-	if err != nil {
-		return err
-	}
+	//row, err := gfile.EncodeBlock(encoded)
+	//if err != nil {
+	//	return err
+	//}
 	ss.mtx.Lock()
 	offset := ss.ptr
-	_len, _ := ss.buf.Write(row)
+	_len, _ := ss.buf.Write(encoded)
 	_ = ss.buf.Flush()
 	ss.ptr += _len
 	ss.mtx.Unlock()
