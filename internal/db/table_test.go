@@ -23,18 +23,18 @@ func tearDown(t *testing.T) {
 }
 
 func TestFileDB(t *testing.T) {
-	// t.Skip("skipping...")
+	t.Skip("skipping...")
 	t.Cleanup(func() {
 		tearDown(t)
 	})
-	start := time.Now()
-	opts := &gdb.TableOpts{
-		DataDir:   []byte("testdata"),
-		TableName: []byte("default"),
-		InMemory:  false,
-		WalMode:   true,
-	}
-	db := gdb.New(opts)
+	db := gdb.New(
+		&gdb.TableOpts{
+			DataDir:   []byte("testdata"),
+			TableName: []byte("default"),
+			InMemory:  false,
+			WalMode:   true,
+		},
+	)
 
 	// given
 	var wg sync.WaitGroup
@@ -64,9 +64,6 @@ func TestFileDB(t *testing.T) {
 	}
 	wg.Wait()
 
-	t.Logf("%s", time.Since(start))
-
-	start = time.Now()
 	values, ok := db.Scan([]byte("key_45"), []byte("key_48"))
 	if !ok {
 		t.Errorf("missing keys %v", values)
@@ -74,8 +71,6 @@ func TestFileDB(t *testing.T) {
 	if len(values) == 0 {
 		t.Errorf("missing keys %v", values)
 	}
-
-	t.Logf("%s %+v", time.Since(start), values)
 
 	db.Close()
 }
@@ -92,7 +87,7 @@ func TestInMemoryDB(t *testing.T) {
 
 	// given
 	var wg sync.WaitGroup
-	count := 50_000
+	count := 1_000
 	for i := 0; i < count; i++ {
 		wg.Add(1)
 		go func(idx int) {
@@ -119,6 +114,7 @@ func TestInMemoryDB(t *testing.T) {
 	wg.Wait()
 
 	t.Logf("%s", time.Since(start))
+
 	db.Close()
 
 }

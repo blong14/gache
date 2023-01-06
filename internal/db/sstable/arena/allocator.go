@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"sync"
 	"time"
+
+	gfile "github.com/blong14/gache/internal/io/file"
 )
 
 // Arena https://gist.github.com/quillaja/222c9af7ade058b60ed08e13bf0b6387
@@ -23,7 +25,7 @@ type Arena interface {
 }
 
 type goarena struct {
-	data    Map
+	data    gfile.Map
 	buffer  chan KeyValue
 	end     uint64
 	invalid bool
@@ -50,7 +52,7 @@ func flusher(a *goarena) {
 }
 
 func NewGoArena(f *os.File, size uint64) Arena {
-	m, err := NewMap(f, Prot(Read), Prot(Write), Flag(Shared))
+	m, err := gfile.NewMap(f, gfile.Prot(gfile.Read), gfile.Prot(gfile.Write), gfile.Flag(gfile.Shared))
 	if err != nil {
 		panic(err)
 	}
@@ -115,7 +117,6 @@ func (a *goarena) ReadAt(p []byte, start, len_ int64) (int, error) {
 	}
 	v := bytes.TrimSuffix(values[1], []byte(";"))
 	n := copy(p, v)
-
 	return n, nil
 }
 

@@ -108,14 +108,6 @@ func (ss *SSTable) Set(k, v []byte) error {
 	return nil
 }
 
-func (ss *SSTable) XSet(buf *bytes.Buffer) error {
-	_, _, err := ss.data.Append(buf.Bytes())
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func (ss *SSTable) Free() {
 	if err := ss.data.Close(); err != nil {
 		log.Println(err)

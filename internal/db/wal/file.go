@@ -49,7 +49,6 @@ func (ss *WAL) Set(k, v []byte) error {
 	buf := writePool.Get().(*bytes.Buffer)
 	defer writePool.Put(buf)
 	buf.Reset()
-
 	makeRow(buf, k, v)
 	encoded := byteArena.Allocate(buf.Len())
 	copy(encoded, buf.Bytes())
@@ -57,11 +56,9 @@ func (ss *WAL) Set(k, v []byte) error {
 	//if err != nil {
 	//	return err
 	//}
-
 	ss.mtx.Lock()
 	_, _ = ss.buf.Write(encoded)
 	_ = ss.buf.Flush()
 	ss.mtx.Unlock()
-
 	return nil
 }
