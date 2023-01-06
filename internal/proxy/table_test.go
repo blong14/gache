@@ -14,6 +14,17 @@ import (
 	gproxy "github.com/blong14/gache/internal/proxy"
 )
 
+func tearDown(t *testing.T) {
+	err := os.Remove(filepath.Join("testdata", "default-wal.dat"))
+	if err != nil {
+		t.Log(err)
+	}
+	err = os.Remove(filepath.Join("testdata", "default.dat"))
+	if err != nil {
+		t.Log(err)
+	}
+}
+
 func TestQueryProxy_Execute(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	qp, err := gproxy.NewQueryProxy()
@@ -24,14 +35,7 @@ func TestQueryProxy_Execute(t *testing.T) {
 	t.Cleanup(func() {
 		gproxy.StopProxy(ctx, qp)
 		cancel()
-		err = os.Remove(filepath.Join("testdata", "default-wal.dat"))
-		if err != nil {
-			t.Log(err)
-		}
-		err = os.Remove(filepath.Join("testdata", "default.dat"))
-		if err != nil {
-			t.Log(err)
-		}
+		tearDown(t)
 	})
 
 	start := time.Now()
