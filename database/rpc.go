@@ -12,6 +12,7 @@ import (
 type GacheClient interface {
 	Get(ctx context.Context, t, k []byte) ([]byte, error)
 	Scan(ctx context.Context, t, s, e []byte) ([][][]byte, error)
+	ScanWithLimit(ctx context.Context, t, l []byte) ([][][]byte, error)
 	Set(ctx context.Context, t, k, v []byte) error
 }
 
@@ -68,6 +69,23 @@ func (c *client) Scan(ctx context.Context, table, start, end []byte) ([][][]byte
 		sql.Named("table", table),
 		sql.Named("start", start),
 		sql.Named("end", end),
+	).Scan(&result)
+	if err != nil {
+		return nil, err
+	}
+	if result.Success {
+		return result.RangeValues, nil
+	}
+	return nil, errors.New("missing value")
+}
+
+func (c *client) ScanWithLimit(ctx context.Context, table, limit []byte) ([][][]byte, error) {
+	var result *gdb.QueryResponse
+	err := c.database.QueryRowContext(
+		ctx,
+		"select * from :table limit :limit;",
+		sql.Named("table", table),
+		sql.Named("limit", limit),
 	).Scan(&result)
 	if err != nil {
 		return nil, err

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	gskl "github.com/blong14/gache/internal/map/xskiplist"
+	gskl "github.com/blong14/gache/internal/db/memtable"
 )
 
 type test struct {
@@ -21,7 +21,7 @@ type test struct {
 func testMap(t *testing.T, name string, test test) {
 	t.Run(fmt.Sprintf("skip list test %s", name), func(t *testing.T) {
 		t.Parallel()
-		m := gskl.New()
+		m := gskl.NewSkipList()
 		if test.setup != nil {
 			test.setup(t, m)
 		}
@@ -158,7 +158,7 @@ type bench struct {
 
 func benchMap(b *testing.B, bench bench) {
 	b.Run("skip list benchmark", func(b *testing.B) {
-		m := gskl.New()
+		m := gskl.NewSkipList()
 		if bench.setup != nil {
 			bench.setup(b, m)
 		}

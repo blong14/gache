@@ -51,11 +51,7 @@ func newParseContext(scanner *bufio.Scanner, query *gdb.Query) *parseContext {
 			"from": func(scanner *bufio.Scanner, query *gdb.Query) error {
 				if scanner.Scan() {
 					table := strings.TrimSpace(scanner.Text())
-					if strings.HasSuffix(table, ";") {
-						query.Header.TableName = []byte(strings.TrimSuffix(table, ";"))
-						return nil
-					}
-					query.Header.TableName = []byte(table)
+					query.Header.TableName = []byte(strings.TrimSuffix(table, ";"))
 				}
 				return nil
 			},
@@ -93,11 +89,16 @@ func newParseContext(scanner *bufio.Scanner, query *gdb.Query) *parseContext {
 				return nil
 			},
 			"select": func(scanner *bufio.Scanner, query *gdb.Query) error {
-				query.Header.Inst = gdb.GetRange
-				if !scanner.Scan() {
-					return errors.New("missing token")
+				if scanner.Scan() {
+					query.Header.Inst = gdb.GetRange
+					switch scanner.Text() {
+					case "count":
+						query.Header.Inst = gdb.Count
+					default:
+					}
+					return nil
 				}
-				return nil
+				return errors.New("missing token")
 			},
 			"into": func(scanner *bufio.Scanner, query *gdb.Query) error {
 				if scanner.Scan() {
@@ -143,7 +144,7 @@ func newParseContext(scanner *bufio.Scanner, query *gdb.Query) *parseContext {
 					limit := strings.TrimSpace(scanner.Text())
 					l, err := strconv.Atoi(strings.TrimSuffix(limit, ";"))
 					if err != nil {
-						return err
+						l = 0
 					}
 					query.KeyRange.Limit = l
 				}

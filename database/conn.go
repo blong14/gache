@@ -5,10 +5,13 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
 
+	gdb "github.com/blong14/gache/internal/db"
 	glog "github.com/blong14/gache/internal/logging"
 	gproxy "github.com/blong14/gache/internal/proxy"
 )
@@ -17,6 +20,7 @@ type QueryResponse struct {
 	Key         []byte
 	Value       []byte
 	RangeValues [][][]byte
+	Stats       gdb.QueryStats
 	Success     bool
 }
 
@@ -99,6 +103,11 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 			q.Key = valueOrKey
 		case "value":
 			q.Value = valueOrKey
+		case "limit":
+			q.KeyRange.Limit, err = strconv.Atoi(string(valueOrKey))
+			if err != nil {
+				return nil, fmt.Errorf("invalid limit arg: %w", err)
+			}
 		default:
 			return nil, errors.New("invalid args")
 		}
@@ -110,6 +119,7 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 			Key:         resp.Key,
 			Value:       resp.Value,
 			RangeValues: resp.RangeValues,
+			Stats:       resp.Stats,
 			Success:     resp.Success,
 		},
 	}, nil
