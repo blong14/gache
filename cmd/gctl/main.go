@@ -71,7 +71,8 @@ func accept(ctx context.Context, db *sql.DB) {
 				b.WriteString(fmt.Sprintf("%d.\t%s\t\t%s\n", i, r[0], r[1]))
 			}
 		}
-		b.WriteString(fmt.Sprintf("[%s]\n%% ", time.Since(start)))
+		b.WriteString(
+			fmt.Sprintf("\n[%s] %d rows\n%% ", time.Since(start), result.Stats.Count))
 		fmt.Print(b.String())
 	}
 }

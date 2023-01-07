@@ -36,6 +36,12 @@ func TestParse(t *testing.T) {
 			},
 			KeyRange: gdb.KeyRange{Start: []byte("aaa"), End: []byte("ddd")},
 		},
+		"select count from default;": {
+			Header: gdb.QueryHeader{
+				Inst:      gdb.Count,
+				TableName: []byte("default"),
+			},
+		},
 
 		"insert into default set key = _key, value = _value;": {
 			Header: gdb.QueryHeader{
