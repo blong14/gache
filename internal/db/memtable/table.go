@@ -6,24 +6,23 @@ import (
 	"unsafe"
 
 	gstable "github.com/blong14/gache/internal/db/sstable"
-	gskl "github.com/blong14/gache/internal/map/xskiplist"
 )
 
 var ErrAllowedBytesExceeded = errors.New("memtable allowed bytes exceeded")
 
 type MemTable struct {
-	readBuffer *gskl.SkipList
+	readBuffer *SkipList
 	bytes      uint64
 }
 
 func New() *MemTable {
 	return &MemTable{
-		readBuffer: gskl.New(),
+		readBuffer: NewSkipList(),
 	}
 }
 
-func (m *MemTable) buffer() *gskl.SkipList {
-	reader := (*gskl.SkipList)(atomic.LoadPointer(
+func (m *MemTable) buffer() *SkipList {
+	reader := (*SkipList)(atomic.LoadPointer(
 		(*unsafe.Pointer)(unsafe.Pointer(&m.readBuffer))))
 	return reader
 }
@@ -48,9 +47,13 @@ func (m *MemTable) Scan(k, v []byte, f func(k, v []byte) bool) {
 	m.buffer().Scan(k, v, f)
 }
 
+func (m *MemTable) Range(f func(k, v []byte) bool) {
+	m.buffer().Range(f)
+}
+
 func (m *MemTable) Flush(sstable *gstable.SSTable) error {
 	reader := m.buffer()
-	nReader := gskl.New()
+	nReader := NewSkipList()
 	for {
 		if atomic.CompareAndSwapPointer(
 			(*unsafe.Pointer)(unsafe.Pointer(&m.readBuffer)),
