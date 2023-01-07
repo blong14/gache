@@ -2,7 +2,6 @@ package view
 
 import (
 	"context"
-	"fmt"
 
 	gdb "github.com/blong14/gache/internal/db"
 	gerrors "github.com/blong14/gache/internal/errors"
@@ -28,47 +27,60 @@ func (va *Table) Execute(ctx context.Context, query *gdb.Query) {
 			resp = gdb.QueryResponse{
 				Key:         query.Key,
 				Value:       value,
-				Success:     true,
 				RangeValues: [][][]byte{{query.Key, value}},
+				Stats: gdb.QueryStats{
+					Count: 1,
+				},
+				Success: true,
 			}
 		}
 		query.Done(resp)
-	case gdb.Print:
-		va.impl.Print()
-		query.Done(gdb.QueryResponse{Success: true})
-	case gdb.Range:
-		va.impl.Range(func(k, v []byte) bool {
+	case gdb.Count:
+		var count uint
+		va.impl.Range(func(_, _ []byte) bool {
 			select {
 			case <-ctx.Done():
 				return false
 			default:
+				count++
+				return true
 			}
-			fmt.Printf("%v\n", k)
-			return true
 		})
-		query.Done(gdb.QueryResponse{Success: true})
-	case gdb.GetRange:
-		values, ok := va.impl.ScanWithLimit(
-			query.KeyRange.Start, query.KeyRange.End, query.KeyRange.Limit)
-		if !ok {
-			query.Done(gdb.QueryResponse{Success: false, RangeValues: values})
-			return
-		}
-		query.Done(
-			gdb.QueryResponse{Success: true, RangeValues: values},
-		)
-	case gdb.SetValue:
-		if err := va.impl.Set(query.Key, query.Value); err != nil {
-			query.Done(gdb.QueryResponse{Success: false})
-			return
-		}
 		query.Done(
 			gdb.QueryResponse{
-				Key:     query.Key,
-				Value:   query.Value,
+				Stats: gdb.QueryStats{
+					Count: count,
+				},
 				Success: true,
 			},
 		)
+	case gdb.GetRange:
+		var resp gdb.QueryResponse
+		values, ok := va.impl.ScanWithLimit(
+			query.KeyRange.Start, query.KeyRange.End, query.KeyRange.Limit)
+		if ok {
+			resp = gdb.QueryResponse{
+				RangeValues: values,
+				Stats: gdb.QueryStats{
+					Count: uint(len(values)),
+				},
+				Success: true,
+			}
+		}
+		query.Done(resp)
+	case gdb.SetValue:
+		var resp gdb.QueryResponse
+		if err := va.impl.Set(query.Key, query.Value); err == nil {
+			resp = gdb.QueryResponse{
+				Key:   query.Key,
+				Value: query.Value,
+				Stats: gdb.QueryStats{
+					Count: 1,
+				},
+				Success: true,
+			}
+		}
+		query.Done(resp)
 	case gdb.BatchSetValue:
 		var errs *gerrors.Error
 		for _, kv := range query.Values {
@@ -76,7 +88,14 @@ func (va *Table) Execute(ctx context.Context, query *gdb.Query) {
 				errs = gerrors.Append(errs, va.impl.Set(kv.Key, kv.Value))
 			}
 		}
-		query.Done(gdb.QueryResponse{Success: true})
+		query.Done(
+			gdb.QueryResponse{
+				Stats: gdb.QueryStats{
+					Count: uint(len(query.Values)),
+				},
+				Success: true,
+			},
+		)
 	default:
 	}
 }

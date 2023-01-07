@@ -91,8 +91,8 @@ func (w *WorkPool) Execute(ctx context.Context, query *gdb.Query) {
 			opts = query.Header.Opts
 		} else {
 			opts = &gdb.TableOpts{
-				InMemory:  true,
-				WalMode:   false,
+				InMemory:  false,
+				WalMode:   true,
 				DataDir:   []byte("testdata"),
 				TableName: query.Header.TableName,
 			}
