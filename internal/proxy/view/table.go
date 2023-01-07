@@ -2,6 +2,7 @@ package view
 
 import (
 	"context"
+	"fmt"
 
 	gdb "github.com/blong14/gache/internal/db"
 	gerrors "github.com/blong14/gache/internal/errors"
@@ -48,6 +49,9 @@ func (va *Table) Execute(ctx context.Context, query *gdb.Query) {
 		})
 		query.Done(
 			gdb.QueryResponse{
+				RangeValues: [][][]byte{
+					{[]byte("count"), []byte(fmt.Sprintf("%d", count))},
+				},
 				Stats: gdb.QueryStats{
 					Count: count,
 				},
