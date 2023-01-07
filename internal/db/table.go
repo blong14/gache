@@ -73,7 +73,6 @@ func (db *fileDatabase) Connect() error {
 		}
 		db.handle = f
 		db.sstable = gstable.New(db.handle)
-
 		file := fmt.Sprintf("%s-wal.dat", db.name)
 		p := path.Join(db.dir, file)
 		f, err = os.OpenFile(p, os.O_CREATE|os.O_RDWR, 0644)
@@ -123,8 +122,11 @@ func (db *fileDatabase) Close() {
 	}
 }
 
-func (db *fileDatabase) Print()                           {}
-func (db *fileDatabase) Range(fnc func(k, v []byte) bool) {}
+func (db *fileDatabase) Print() {}
+
+func (db *fileDatabase) Range(fnc func(k, v []byte) bool) {
+	db.memtable.Range(fnc)
+}
 
 func (db *fileDatabase) Scan(s, e []byte) ([][][]byte, bool) {
 	out := make([][][]byte, 0)
@@ -133,11 +135,10 @@ func (db *fileDatabase) Scan(s, e []byte) ([][][]byte, bool) {
 		return true
 	})
 	return out, true
-
 }
 
 func (db *fileDatabase) ScanWithLimit(s, e []byte, limit int) ([][][]byte, bool) {
-	out := make([][][]byte, 0, limit)
+	out := make([][][]byte, 0)
 	db.memtable.Scan(s, e, func(k, v []byte) bool {
 		out = append(out, [][]byte{k, v})
 		if limit > 0 && len(out) >= limit {
@@ -172,19 +173,21 @@ func (db *inMemoryDatabase) Scan(s, e []byte) ([][][]byte, bool) {
 }
 
 func (db *inMemoryDatabase) ScanWithLimit(s, e []byte, limit int) ([][][]byte, bool) {
-	var total int
 	out := make([][][]byte, 0)
 	db.memtable.Scan(s, e, func(k, v []byte) bool {
-		if total <= limit {
-			out = append(out, [][]byte{k, v})
-			total++
+		out = append(out, [][]byte{k, v})
+		if limit > 0 && len(out) >= limit {
+			return false
 		}
-		return total <= limit
+		return true
 	})
 	return out, true
 }
 
-func (db *inMemoryDatabase) Close()                           {}
-func (db *inMemoryDatabase) Print()                           {}
-func (db *inMemoryDatabase) Range(fnc func(k, v []byte) bool) {}
-func (db *inMemoryDatabase) Connect() error                   { return nil }
+func (db *inMemoryDatabase) Range(fnc func(k, v []byte) bool) {
+	db.memtable.Range(fnc)
+}
+
+func (db *inMemoryDatabase) Close()         {}
+func (db *inMemoryDatabase) Print()         {}
+func (db *inMemoryDatabase) Connect() error { return nil }

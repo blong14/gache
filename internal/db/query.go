@@ -10,6 +10,7 @@ type QueryInstruction int
 const (
 	AddTable QueryInstruction = iota
 	BatchSetValue
+	Count
 	GetValue
 	GetRange
 	Load
@@ -24,6 +25,8 @@ func (i QueryInstruction) String() string {
 		return "AddTable"
 	case BatchSetValue:
 		return "BatchSetValue"
+	case Count:
+		return "Count"
 	case GetValue:
 		return "GetValue"
 	case GetRange:
@@ -49,10 +52,15 @@ type QueryHeader struct {
 	Inst      QueryInstruction
 }
 
+type QueryStats struct {
+	Count uint
+}
+
 type QueryResponse struct {
 	Key         []byte
 	Value       []byte
 	RangeValues [][][]byte
+	Stats       QueryStats
 	Success     bool
 }
 
@@ -92,14 +100,11 @@ func (m *Query) String() string {
 }
 
 func (m *Query) Done(r QueryResponse) {
-	if m.done == nil {
-		return
-	}
 	select {
 	case <-m.ctx.Done():
 	case m.done <- r:
+		close(m.done)
 	}
-	close(m.done)
 }
 
 func (m *Query) Context() context.Context {
