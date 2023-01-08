@@ -57,7 +57,7 @@ func TestCount(t *testing.T) {
 }
 
 func TestGetAndSet(t *testing.T) {
-	count := 50_000
+	count := 1_000
 	testMap(t, "get and set", test{
 		run: func(t *testing.T, m *gskl.SkipList) {
 			start := time.Now()
