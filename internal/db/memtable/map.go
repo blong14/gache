@@ -4,11 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"unsafe"
-
-	glog "github.com/blong14/gache/internal/logging"
 )
 
 // RandUint32 returns a lock free uint32 value.
@@ -47,30 +44,6 @@ func (n *node) Next() *node {
 	return (*node)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&n.next))))
 }
 
-var mtx sync.Mutex
-
-var ballast = 2048
-
-type NodeArena []*node
-
-func (na *NodeArena) allocate() *node {
-	mtx.Lock()
-	defer mtx.Unlock()
-	if len(*na) == 0 {
-		tmp := make([]*node, ballast)
-		for i := 0; i < ballast; i++ {
-			tmp[i] = newNode(0, nil, nil, nil)
-		}
-		*na = tmp
-		ballast = ballast * 2
-	}
-	n := &(*na)[len(*na)-1]
-	*na = (*na)[:len(*na)-1]
-	return *n
-}
-
-var nodeArena NodeArena
-
 type index struct {
 	node  *node
 	down  *index
@@ -105,33 +78,6 @@ func (i *index) Right() *index {
 	}
 	return (*index)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&i.right))))
 }
-
-var imtx sync.Mutex
-
-var iballast = 2048
-
-type IndexArena []*index
-
-func (na *IndexArena) allocate(nd *node, d *index, r *index) *index {
-	imtx.Lock()
-	defer imtx.Unlock()
-	if len(*na) == 0 {
-		tmp := make([]*index, iballast)
-		for i := 0; i < iballast; i++ {
-			tmp[i] = newIndex(nil, nil, nil)
-		}
-		*na = tmp
-		iballast = iballast * 2
-	}
-	n := &(*na)[len(*na)-1]
-	(*n).node = nd
-	(*n).down = d
-	(*n).right = r
-	*na = (*na)[:len(*na)-1]
-	return *n
-}
-
-var indexArena IndexArena
 
 type SkipList struct {
 	head  *index
@@ -315,8 +261,8 @@ func (sk *SkipList) Set(key, value []byte) error {
 		levels := 0
 		h := sk.top()
 		if h == nil {
-			base := nodeArena.allocate()
-			nh := indexArena.allocate(base, nil, nil)
+			base := newNode(0, nil, nil, nil)
+			nh := newIndex(base, nil, nil)
 			if atomic.CompareAndSwapPointer(
 				(*unsafe.Pointer)(unsafe.Pointer(&sk.head)),
 				unsafe.Pointer(h),
@@ -360,6 +306,7 @@ func (sk *SkipList) Set(key, value []byte) error {
 		}
 		if b != nil {
 			var z *node
+			var p *node
 			for {
 				c := -1
 				n := b.Next()
@@ -381,10 +328,9 @@ func (sk *SkipList) Set(key, value []byte) error {
 					return nil
 				}
 				if c < 0 {
-					p := nodeArena.allocate()
-					p.hash = hashedKey
-					p.key = key
-					p.val = value
+					if p == nil {
+						p = newNode(hashedKey, key, value, nil)
+					}
 					p.next = n
 					if atomic.CompareAndSwapPointer(
 						(*unsafe.Pointer)(unsafe.Pointer(&b.next)),
@@ -405,7 +351,7 @@ func (sk *SkipList) Set(key, value []byte) error {
 					var x *index
 					for {
 						skips -= 1
-						x = indexArena.allocate(z, x, nil)
+						x = newIndex(z, x, nil)
 						if rnd <= 0 || skips < 0 {
 							break
 						} else {
@@ -413,8 +359,8 @@ func (sk *SkipList) Set(key, value []byte) error {
 						}
 					}
 					if sk.addIndices(h, skips, x) && skips < 0 && sk.top() == h {
-						hx := indexArena.allocate(z, x, nil)
-						nh := indexArena.allocate(h.Node(), h, hx)
+						hx := newIndex(z, x, nil)
+						nh := newIndex(h.Node(), h, hx)
 						atomic.CompareAndSwapPointer(
 							(*unsafe.Pointer)(unsafe.Pointer(&sk.head)),
 							unsafe.Pointer(h),
@@ -566,16 +512,4 @@ func (sk *SkipList) Print() {
 
 func (sk *SkipList) Count() uint64 {
 	return atomic.LoadUint64(&sk.count)
-}
-
-func init() {
-	glog.Track("allocating memory")
-	nodeArena = make(NodeArena, ballast)
-	for i := 0; i < ballast; i++ {
-		nodeArena[i] = newNode(0, nil, nil, nil)
-	}
-	indexArena = make(IndexArena, iballast)
-	for i := 0; i < iballast; i++ {
-		indexArena[i] = newIndex(nil, nil, nil)
-	}
 }
