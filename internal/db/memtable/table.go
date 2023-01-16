@@ -31,6 +31,10 @@ func (m *MemTable) Get(k []byte) ([]byte, bool) {
 	return m.buffer().Get(k)
 }
 
+func (m *MemTable) Count() uint64 {
+	return m.buffer().Count()
+}
+
 func (m *MemTable) Set(k, v []byte) error {
 	err := m.buffer().Set(k, v)
 	if err != nil {

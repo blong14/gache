@@ -22,6 +22,7 @@ type Table interface {
 	Range(func(k, v []byte) bool)
 	Print()
 	Connect() error
+	Count() uint64
 	Close()
 }
 
@@ -90,6 +91,10 @@ func (db *fileDatabase) Get(k []byte) ([]byte, bool) {
 		return value, true
 	}
 	return db.sstable.Get(k)
+}
+
+func (db *fileDatabase) Count() uint64 {
+	return db.memtable.Count()
 }
 
 func (db *fileDatabase) Set(k, v []byte) error {
@@ -188,6 +193,7 @@ func (db *inMemoryDatabase) Range(fnc func(k, v []byte) bool) {
 	db.memtable.Range(fnc)
 }
 
+func (db *inMemoryDatabase) Count() uint64  { return db.memtable.Count() }
 func (db *inMemoryDatabase) Close()         {}
 func (db *inMemoryDatabase) Print()         {}
 func (db *inMemoryDatabase) Connect() error { return nil }
