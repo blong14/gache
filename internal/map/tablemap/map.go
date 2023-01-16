@@ -3,6 +3,7 @@ package tablemap
 import (
 	"fmt"
 	"log"
+	"sync"
 )
 
 type MapEntry struct {
@@ -21,6 +22,7 @@ type TableOption[K, V any] func(t *TableMap[K, V])
 
 type TableMap[K, V any] struct {
 	// Page 430
+	mtx        sync.RWMutex
 	impl       []*MapEntry
 	comparator func(a, b K) int
 }
@@ -28,6 +30,7 @@ type TableMap[K, V any] struct {
 // New returns a newly created TableMap
 func New[K, V any](comp func(a, b K) int) *TableMap[K, V] {
 	return &TableMap[K, V]{
+		mtx:        sync.RWMutex{},
 		impl:       make([]*MapEntry, 0, 1024),
 		comparator: comp,
 	}
@@ -54,6 +57,8 @@ func NewWithOptions[K, V any](comp func(a, b K) int, options ...TableOption[K, V
 }
 
 func (c *TableMap[K, V]) Init(comp func(a, b K) int) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
 	c.impl = make([]*MapEntry, 0, 1024)
 	c.comparator = comp
 }
@@ -79,44 +84,53 @@ func (c *TableMap[K, V]) findIndex(key K, low, high int) int {
 func (c *TableMap[K, V]) search(key K) int {
 	// finds the index of the key starting
 	// at the root of the tree
-	return c.findIndex(key, 0, c.Size()-1)
+	return c.findIndex(key, 0, c.size()-1)
 }
 
 func (c *TableMap[K, V]) equalto(key K, i uint) bool {
-	return i < uint(c.Size()) && c.comparator(key, c.impl[i].Key.(K)) == 0
+	return i < uint(c.size()) && c.comparator(key, c.impl[i].Key.(K)) == 0
 }
 
 func (c *TableMap[K, V]) greaterthan(key K, i uint) bool {
-	return i < uint(c.Size()) && c.comparator(key, c.impl[i].Key.(K)) > 0
+	return i < uint(c.size()) && c.comparator(key, c.impl[i].Key.(K)) > 0
 }
 
 func (c *TableMap[K, V]) Reset() {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
 	temp := c.impl[0:]
 	c.impl = temp
 }
 
 // Get returns the value associated with the specified key (or else false)
 func (c *TableMap[K, V]) Get(key K) (V, bool) {
+	c.mtx.RLock()
+	defer c.mtx.RUnlock()
 	j := c.search(key)
-	if j == c.Size() || !c.equalto(key, uint(j)) {
+	if j == c.size() || !c.equalto(key, uint(j)) {
 		return *new(V), false
 	}
 	return c.impl[j].Value.(V), true
 }
 
-func (c *TableMap[K, V]) Print() { log.Printf("%d %v", len(c.impl), c.impl) }
+func (c *TableMap[K, V]) Print() {
+	c.mtx.RLock()
+	defer c.mtx.RUnlock()
+	log.Printf("%d %v", len(c.impl), c.impl)
+}
 
 // Range iterates through each key in the map, applying fnc
 // to each item. fnc returns a bool
 // true represents continuation of the range operation
 // false indicates ranging should stop
 func (c *TableMap[K, V]) Range(fnc func(k K, v V) bool) {
+	c.mtx.RLock()
+	defer c.mtx.RUnlock()
 	for _, i := range c.impl {
-		result := fnc(i.Key.(K), i.Value.(V))
-		if result {
-			continue
+		ok := fnc(i.Key.(K), i.Value.(V))
+		if !ok {
+			return
 		}
-		return
 	}
 }
 
@@ -135,17 +149,27 @@ func (c *TableMap[K, V]) insertSort(index int, el *MapEntry) {
 
 // Set sets a key value pair in the map
 func (c *TableMap[K, V]) Set(key K, value V) {
-	if c.greaterthan(key, uint(c.Size()-1)) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+	if c.greaterthan(key, uint(c.size()-1)) {
 		c.insertLast(newMapEntry(key, value))
 		return
 	}
 	index := c.search(key)
 	if c.equalto(key, uint(index)) {
-		c.impl[index].Value = value
+		c.impl[index] = newMapEntry(key, value)
 		return
 	}
 	c.insertSort(index, newMapEntry(key, value))
 }
 
+func (c *TableMap[K, V]) size() int {
+	return len(c.impl)
+}
+
 // Size returns the number of entries in the map
-func (c *TableMap[K, V]) Size() int { return len(c.impl) }
+func (c *TableMap[K, V]) Size() int {
+	c.mtx.RLock()
+	defer c.mtx.RUnlock()
+	return c.size()
+}

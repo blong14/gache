@@ -57,7 +57,7 @@ func TestCount(t *testing.T) {
 }
 
 func TestGetAndSet(t *testing.T) {
-	count := 1_000
+	count := 5_000
 	testMap(t, "get and set", test{
 		run: func(t *testing.T, m *gskl.SkipList) {
 			start := time.Now()
@@ -74,7 +74,6 @@ func TestGetAndSet(t *testing.T) {
 				}(i)
 			}
 			wg.Wait()
-			t.Logf("%s", time.Since(start))
 			for i := 0; i < count; i++ {
 				wg.Add(1)
 				go func(indx int) {
