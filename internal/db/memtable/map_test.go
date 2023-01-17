@@ -176,7 +176,7 @@ func benchMap(b *testing.B, bench bench) {
 	})
 }
 
-func BenchmarkSkiplist_LoadMostlyHits(b *testing.B) {
+func BenchmarkConcurrent_LoadMostlyHits(b *testing.B) {
 	const hits, misses = 1023, 1
 	benchMap(b, bench{
 		setup: func(b *testing.B, m *gskl.SkipList) {
@@ -195,7 +195,7 @@ func BenchmarkSkiplist_LoadMostlyHits(b *testing.B) {
 	})
 }
 
-func BenchmarkSkiplist_LoadMostlyMisses(b *testing.B) {
+func BenchmarkConcurrent_LoadMostlyMisses(b *testing.B) {
 	const hits, misses = 1, 1023
 	benchMap(b, bench{
 		setup: func(_ *testing.B, m *gskl.SkipList) {
@@ -214,7 +214,7 @@ func BenchmarkSkiplist_LoadMostlyMisses(b *testing.B) {
 	})
 }
 
-func BenchmarkSkiplist_LoadOrStoreBalanced(b *testing.B) {
+func BenchmarkConcurrent_LoadOrStoreBalanced(b *testing.B) {
 	const hits, misses = 1023, 1023
 	value := []byte("value")
 	benchMap(b, bench{
@@ -244,7 +244,7 @@ func BenchmarkSkiplist_LoadOrStoreBalanced(b *testing.B) {
 	})
 }
 
-func BenchmarkSkiplist_LoadOrStoreUnique(b *testing.B) {
+func BenchmarkConcurrent_LoadOrStoreUnique(b *testing.B) {
 	const hits = 1023
 	value := []byte("value")
 	benchMap(b, bench{
@@ -262,7 +262,7 @@ func BenchmarkSkiplist_LoadOrStoreUnique(b *testing.B) {
 	})
 }
 
-func BenchmarkSkiplist_LoadOrStoreCollision(b *testing.B) {
+func BenchmarkConcurrent_LoadOrStoreCollision(b *testing.B) {
 	const hits = 1023
 	value := []byte("value")
 	benchMap(b, bench{
@@ -290,7 +290,7 @@ func BenchmarkSkiplist_LoadOrStoreCollision(b *testing.B) {
 	})
 }
 
-func BenchmarkSkiplist_AdversarialAlloc(b *testing.B) {
+func BenchmarkConcurrent_AdversarialAlloc(b *testing.B) {
 	value := []byte("value")
 	benchMap(b, bench{
 		perG: func(b *testing.B, pb *testing.PB, i int, m *gskl.SkipList) {
@@ -313,7 +313,7 @@ func BenchmarkSkiplist_AdversarialAlloc(b *testing.B) {
 	})
 }
 
-func BenchmarkSkiplist_Range(b *testing.B) {
+func BenchmarkConcurrent_Range(b *testing.B) {
 	const mapSize = 1 << 10
 	value := []byte("")
 	benchMap(b, bench{
