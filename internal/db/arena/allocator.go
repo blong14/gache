@@ -13,7 +13,7 @@ func (na *ByteArena) Allocate(len_ int) []byte {
 	defer mtx.Unlock()
 	if len(*na) == 0 {
 		*na = make([]byte, ballast)
-		ballast = ballast * 2
+		ballast *= 2
 	}
 	offset := (len(*na) - 1) - len_
 	if offset <= 0 {

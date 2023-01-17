@@ -129,9 +129,9 @@ func DecodeLine(s string) ([]byte, error) {
 	if err != nil {
 		return res, err
 	}
-	//if len(res) < int(l) {
-	//	return nil, errors.New("line decoding failed")
-	//}
+	// if len(res) < int(l) {
+	//	 return nil, errors.New("line decoding failed")
+	// }
 	return res, nil
 }
 

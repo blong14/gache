@@ -61,7 +61,7 @@ func PublishQuery(client *rpc.Client, queries ...*gdb.Query) (*QueryResponse, er
 	return resp, err
 }
 
-func RpcHandlers() []grpc.Handler {
+func RPCHandlers() []grpc.Handler {
 	proxy, err := gache.GetProxy()
 	if err != nil {
 		panic(err)

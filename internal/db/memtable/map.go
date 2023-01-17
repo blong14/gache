@@ -99,19 +99,21 @@ func (sk *SkipList) findPredecessor(key uint64) *node {
 	q := sk.top()
 	for q != nil {
 		r := q.Right()
+	loop:
 		for r != nil {
 			p := r.Node()
-			if p == nil || p.hash == 0 || p.val == nil {
+			switch {
+			case p == nil || p.hash == 0 || p.val == nil:
 				atomic.CompareAndSwapPointer(
 					(*unsafe.Pointer)(unsafe.Pointer(&q.right)),
 					unsafe.Pointer(r),
 					unsafe.Pointer(r.Right()),
 				)
-			} else if key > p.hash {
+			case key > p.hash:
 				q = r
 				r = q.Right()
-			} else {
-				break
+			default:
+				break loop
 			}
 		}
 		d := q.Down()
@@ -128,12 +130,13 @@ func (sk *SkipList) findNode(key uint64) *node {
 	for r != nil {
 		n := r.Next()
 		for n != nil {
-			if key > n.hash {
+			switch {
+			case key > n.hash:
 				r = n
 				n = r.Next()
-			} else if key == n.hash {
+			case key == n.hash:
 				return n
-			} else {
+			default:
 				return nil
 			}
 		}
@@ -149,24 +152,27 @@ func (sk *SkipList) addIndices(q *index, skips int, x *index) bool {
 			return false
 		}
 		var retrying bool
+	loop:
 		for {
 			c := -1
 			r := q.Right()
 			if r != nil {
 				p := r.Node()
-				if p == nil || p.hash == 0 || p.val == nil {
+				switch {
+				case p == nil || p.hash == 0 || p.val == nil:
 					atomic.CompareAndSwapPointer(
 						(*unsafe.Pointer)(unsafe.Pointer(&q.right)),
 						unsafe.Pointer(r),
 						unsafe.Pointer(r.Right()),
 					)
 					c = 0
-				} else if key > p.hash {
+				case key > p.hash:
 					q = r
 					r = q.Right()
 					c = 1
-				} else if key == p.hash {
+				case key == p.hash:
 					c = 0
+				default:
 				}
 				if c == 0 {
 					break
@@ -176,12 +182,13 @@ func (sk *SkipList) addIndices(q *index, skips int, x *index) bool {
 			}
 			if c < 0 {
 				d := q.Down()
-				if d != nil && skips > 0 {
+				switch {
+				case d != nil && skips > 0:
 					skips -= 1
 					q = d
-				} else if d != nil && !retrying && !sk.addIndices(d, 0, x.Down()) {
-					break
-				} else {
+				case d != nil && !retrying && !sk.addIndices(d, 0, x.Down()):
+					break loop
+				default:
 					x.right = r
 					if atomic.CompareAndSwapPointer(
 						(*unsafe.Pointer)(unsafe.Pointer(&q.right)),
@@ -277,19 +284,21 @@ func (sk *SkipList) Set(key, value []byte) error {
 			q := h
 			for q != nil {
 				r := q.Right()
+			loop:
 				for r != nil {
 					p := r.Node()
-					if p == nil || p.hash == 0 || p.val == nil {
+					switch {
+					case p == nil || p.hash == 0 || p.val == nil:
 						atomic.CompareAndSwapPointer(
 							(*unsafe.Pointer)(unsafe.Pointer(&q.right)),
 							unsafe.Pointer(r),
 							unsafe.Pointer(r.Right()),
 						)
-					} else if hashedKey > p.hash {
+					case hashedKey > p.hash:
 						q = r
 						r = q.Right()
-					} else {
-						break
+					default:
+						break loop
 					}
 				}
 				if q != nil {
@@ -310,18 +319,20 @@ func (sk *SkipList) Set(key, value []byte) error {
 			for {
 				c := -1
 				n := b.Next()
-				if n == nil {
+				switch {
+				case n == nil:
 					c = -1
-				} else if n.hash == 0 {
+				case n.hash == 0:
 					break
-				} else if n.val == nil {
+				case n.val == nil:
 					// unlinkNode(b, n)
 					c = 1
-				} else if hashedKey > n.hash {
+				case hashedKey > n.hash:
 					b = n
 					c = 1
-				} else if hashedKey == n.hash {
+				case hashedKey == n.hash:
 					c = 0
+				default:
 				}
 				if c == 0 {
 					// already in list

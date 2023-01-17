@@ -126,7 +126,7 @@ func setValueService(db *sql.DB) http.HandlerFunc {
 	}
 }
 
-func HttpHandlers(db *sql.DB) ghttp.Handler {
+func HTTPHandlers(db *sql.DB) ghttp.Handler {
 	return map[string]http.HandlerFunc{
 		"/healthz": HealthzService,
 		"/get":     MustBe(http.MethodGet, getValueService(db)),

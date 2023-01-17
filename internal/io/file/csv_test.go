@@ -13,7 +13,7 @@ func TestReadCSV(t *testing.T) {
 	scanner.Init()
 	var count int
 	for scanner.Scan() {
-		count = count + len(scanner.Rows())
+		count += len(scanner.Rows())
 	}
 	if count == 0 {
 		t.Error("value is nil")

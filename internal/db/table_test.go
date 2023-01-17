@@ -45,7 +45,7 @@ func random(rng *rand.Rand, b []byte) []byte {
 func TestFileDB(t *testing.T) {
 	t.Skip("skipping...")
 	t.Cleanup(func() {
-		//tearDown(t)
+		tearDown(t)
 	})
 	db := gdb.New(
 		&gdb.TableOpts{

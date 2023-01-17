@@ -33,11 +33,11 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	rpcSRV := ghandlers.Server(":8080")
-	go grpc.Start(rpcSRV, ghandlers.RpcHandlers())
+	go grpc.Start(rpcSRV, ghandlers.RPCHandlers())
 
 	db := mustGetDB()
 	httpSRV := ghandlers.Server(":8081")
-	go ghttp.Start(httpSRV, ghandlers.HttpHandlers(db))
+	go ghttp.Start(httpSRV, ghandlers.HTTPHandlers(db))
 
 	s := <-sigint
 	log.Printf("received %s signal\n", s)

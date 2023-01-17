@@ -108,7 +108,7 @@ func (c *TableMap[K, V]) Get(key K) (V, bool) {
 	defer c.mtx.RUnlock()
 	j := c.search(key)
 	if j == c.size() || !c.equalto(key, uint(j)) {
-		return *new(V), false
+		return *new(V), false // nolint
 	}
 	return c.impl[j].Value.(V), true
 }
@@ -135,7 +135,7 @@ func (c *TableMap[K, V]) Range(fnc func(k K, v V) bool) {
 }
 
 // Remove removes a key value pair from the map
-func (c *TableMap[K, V]) Remove(_ K) (V, bool) { return *new(V), false }
+func (c *TableMap[K, V]) Remove(_ K) (V, bool) { return *new(V), false } // nolint
 
 func (c *TableMap[K, V]) insertLast(el *MapEntry) {
 	c.impl = append(c.impl, el)

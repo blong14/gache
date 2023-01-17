@@ -15,7 +15,7 @@ func assertMatch(t *testing.T, want []byte, got []byte) {
 	}
 }
 
-func testGet_Hit(ctx context.Context, v *gview.Table, expected *gdb.QueryResponse) func(t *testing.T) {
+func testGetHit(ctx context.Context, v *gview.Table, expected *gdb.QueryResponse) func(t *testing.T) {
 	return func(t *testing.T) {
 		t.Parallel()
 		query, outbox := gdb.NewSetValueQuery(ctx,
@@ -47,7 +47,7 @@ func testGet_Hit(ctx context.Context, v *gview.Table, expected *gdb.QueryRespons
 	}
 }
 
-func testScan_Hit(ctx context.Context, v *gview.Table, expected *gdb.QueryResponse) func(t *testing.T) {
+func testScanHit(ctx context.Context, v *gview.Table, expected *gdb.QueryResponse) func(t *testing.T) {
 	return func(t *testing.T) {
 		t.Parallel()
 		query, outbox := gdb.NewSetValueQuery(ctx,
@@ -79,6 +79,7 @@ func testScan_Hit(ctx context.Context, v *gview.Table, expected *gdb.QueryRespon
 		}
 	}
 }
+
 func TestViewActor_Get(t *testing.T) {
 	t.Parallel()
 	// given
@@ -93,6 +94,6 @@ func TestViewActor_Get(t *testing.T) {
 		Key:   []byte("key"),
 		Value: []byte("value"),
 	}
-	t.Run("hit", testGet_Hit(ctx, v, hit))
-	t.Run("hit", testScan_Hit(ctx, v, hit))
+	t.Run("hit", testGetHit(ctx, v, hit))
+	t.Run("hit", testScanHit(ctx, v, hit))
 }

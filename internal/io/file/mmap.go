@@ -40,7 +40,7 @@ func Prot(p int) Option {
 			m.write = true
 		}
 		if m.prot != -1 {
-			m.prot = m.prot | p
+			m.prot |= p
 			return
 		}
 		m.prot = p
@@ -113,26 +113,26 @@ type mmap struct {
 }
 
 func (m *mmap) Read(p []byte) (int, error) {
-	if m.Pos() >= m.Len() {
+	m.Lock()
+	defer m.Unlock()
+	if m.ptr >= m.len {
 		return 0, io.EOF
 	}
-	n := copy(p, m.data[m.Pos():])
-	m.Lock()
+	n := copy(p, m.data[m.ptr:])
 	m.ptr += n
-	m.Unlock()
-	if n == m.Len()-m.Pos() {
+	if n == m.ptr-m.len {
 		return n, io.EOF
 	}
 	return n, nil
 }
 
 func (m *mmap) ReadAt(p []byte, off int64) (int, error) {
-	if int(off) >= m.Len() {
+	m.RLock()
+	defer m.RUnlock()
+	if int(off) >= m.len {
 		return 0, errors.New("offset is larger than the mmap []byte")
 	}
-	m.RLock()
 	n := copy(p, m.data[off:])
-	m.RUnlock()
 	if n < len(p) {
 		return n, errors.New("len(p) was greater than mmap[off:]")
 	}
@@ -140,12 +140,12 @@ func (m *mmap) ReadAt(p []byte, off int64) (int, error) {
 }
 
 func (m *mmap) Peek(p []byte, start, length int64) (int, error) {
-	if int(start) >= m.Len() || int(start+length) >= m.Len() {
+	m.RLock()
+	defer m.RUnlock()
+	if int(start) >= m.len || int(start+length) >= m.len {
 		return 0, errors.New("offset is larger than the mmap []byte")
 	}
-	m.RLock()
 	n := copy(p, m.data[start:start+length])
-	m.RUnlock()
 	if n < len(p) {
 		return n, errors.New("len(p) was greater than mmap[off:]")
 	}
@@ -194,30 +194,25 @@ func (m *mmap) Seek(offset int64, whence int) (int64, error) {
 		return 0, fmt.Errorf("cannot lock memory: %w", err)
 	}
 	defer func() { _ = m.MUnlock() }()
-
+	m.Lock()
+	defer m.Unlock()
 	switch whence {
 	case 0:
-		if offset < int64(m.Len()) {
-			m.Lock()
+		if offset < int64(m.len) {
 			m.ptr = int(offset)
-			m.Unlock()
-			return int64(m.Pos()), nil
+			return int64(m.ptr), nil
 		}
 		return 0, errors.New("offset goes beyond the data size")
 	case 1:
-		if m.Pos()+int(offset) < m.Len() {
-			m.Lock()
+		if m.ptr+int(offset) < m.len {
 			m.ptr += int(offset)
-			m.Unlock()
-			return int64(m.Pos()), nil
+			return int64(m.ptr), nil
 		}
 		return 0, errors.New("offset goes beyond the data size")
 	case 2:
-		if m.Pos()-int(offset) > -1 {
-			m.Lock()
+		if m.ptr-int(offset) > -1 {
 			m.ptr -= int(offset)
-			m.Unlock()
-			return int64(m.Pos()), nil
+			return int64(m.ptr), nil
 		}
 		return 0, errors.New("offset would set the offset as a negative number")
 	default:

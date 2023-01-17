@@ -15,12 +15,19 @@ issues:
 linters:
   disable-all: true
   enable:
+    - bodyclose
     - errcheck
+    - gocritic
+#    - gocyclo
     - goimports
     - gosimple
     - govet
     - ineffassign
+    - loggercheck
+    - noctx
+    - prealloc
     - staticcheck
+    - stylecheck
     - unconvert
     - unused
   fast: true
