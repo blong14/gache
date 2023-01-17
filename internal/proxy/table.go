@@ -23,6 +23,8 @@ type Worker struct {
 }
 
 func (s *Worker) Start(ctx context.Context) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	glog.Track("%T::%s starting", s.pool, s.id)
 	for {
 		select {

@@ -9,12 +9,13 @@ import (
 
 	garena "github.com/blong14/gache/internal/db/arena"
 	gfile "github.com/blong14/gache/internal/io/file"
+	gmap "github.com/blong14/gache/internal/map/tablemap"
 )
 
 type SSTable struct {
 	mtx   sync.Mutex
 	buf   *bufio.Writer
-	index *sync.Map
+	xindx *gmap.TableMap[[]byte, *indexValue]
 	data  gfile.Map
 	ptr   int
 }
@@ -44,7 +45,7 @@ func New(f *os.File) *SSTable {
 		panic(err)
 	}
 	return &SSTable{
-		index: &sync.Map{},
+		xindx: gmap.New[[]byte, *indexValue](bytes.Compare),
 		data:  mmap,
 		buf:   bufio.NewWriter(f),
 	}
@@ -56,16 +57,12 @@ type indexValue struct {
 }
 
 func (ss *SSTable) Get(k []byte) ([]byte, bool) {
-	raw, ok := ss.index.Load(string(k))
+	raw, ok := ss.xindx.Get(k)
 	if !ok {
 		return nil, false
 	}
-	v, ok := raw.(*indexValue)
-	if !ok {
-		return nil, false
-	}
-	kv := make([]byte, v.length)
-	_, err := ss.data.Peek(kv, v.offset, v.length)
+	kv := byteArena.Allocate(int(raw.length))
+	_, err := ss.data.Peek(kv, raw.offset, raw.length)
 	if err != nil {
 		return nil, false
 	}
@@ -73,38 +70,31 @@ func (ss *SSTable) Get(k []byte) ([]byte, bool) {
 	if err != nil {
 		return nil, false
 	}
-	values := bytes.Split(line[1:len(line)-1], []byte("::"))
-	if len(values) != 2 {
-		return nil, false
-	}
-	return values[1], true
+	klen := line[1]
+	value := line[klen:]
+	return value, true
 }
-
-var writePool = sync.Pool{New: func() any { return bytes.NewBuffer(nil) }}
 
 var byteArena = make(garena.ByteArena, 0)
 
 func (ss *SSTable) Set(k, v []byte) error {
-	buf := writePool.Get().(*bytes.Buffer)
-	defer writePool.Put(buf)
-	buf.Reset()
-	buf.Write(k)
-	buf.Write([]byte("::"))
-	buf.Write(v)
-	buf.Write([]byte("\n"))
-	encoded := byteArena.Allocate(buf.Len())
-	copy(encoded, buf.Bytes())
-	//row, err := gfile.EncodeBlock(encoded)
-	//if err != nil {
-	//	return err
-	//}
+	klen := len(k)
+	vlen := len(v)
+	encoded := byteArena.Allocate(klen + vlen + 1)
+	encoded[0] = byte(klen)
+	copy(encoded[1:klen+1], k)
+	copy(encoded[klen+1:], v)
+	row, err := gfile.EncodeBlock(encoded)
+	if err != nil {
+		return err
+	}
 	ss.mtx.Lock()
 	offset := ss.ptr
-	_len, _ := ss.buf.Write(encoded)
+	_len, _ := ss.buf.Write(row)
 	_ = ss.buf.Flush()
 	ss.ptr += _len
 	ss.mtx.Unlock()
-	ss.index.Store(string(k), &indexValue{offset: int64(offset), length: int64(_len)})
+	ss.xindx.Set(k, &indexValue{offset: int64(offset), length: int64(_len)})
 	return nil
 }
 

@@ -34,30 +34,21 @@ func New(f *os.File) *WAL {
 	}
 }
 
-var writePool = sync.Pool{New: func() any { return bytes.NewBuffer(nil) }}
-
-func makeRow(buf *bytes.Buffer, k, v []byte) {
-	buf.Write(k)
-	buf.Write([]byte("::"))
-	buf.Write(v)
-	buf.Write([]byte("\n"))
-}
-
 var byteArena = make(garena.ByteArena, 0)
 
 func (ss *WAL) Set(k, v []byte) error {
-	buf := writePool.Get().(*bytes.Buffer)
-	defer writePool.Put(buf)
-	buf.Reset()
-	makeRow(buf, k, v)
-	encoded := byteArena.Allocate(buf.Len())
-	copy(encoded, buf.Bytes())
-	// row, err := gfile.EncodeBlock(encoded)
-	//if err != nil {
-	//	return err
-	//}
+	klen := len(k)
+	vlen := len(v)
+	encoded := byteArena.Allocate(klen + vlen + 1)
+	encoded[0] = byte(klen)
+	copy(encoded[1:klen+1], k)
+	copy(encoded[klen+1:], v)
+	row, err := gfile.EncodeBlock(encoded)
+	if err != nil {
+		return err
+	}
 	ss.mtx.Lock()
-	_, _ = ss.buf.Write(encoded)
+	_, _ = ss.buf.Write(row)
 	_ = ss.buf.Flush()
 	ss.mtx.Unlock()
 	return nil

@@ -179,15 +179,9 @@ var byteArena = make(Arena, 4096*4096*4)
 
 // EncodeBlock encodes data in raw uuencoded format
 func EncodeBlock(data []byte) ([]byte, error) {
-	out := pool.Get().(*bytes.Buffer)
-	defer pool.Put(out)
-	out.Reset()
-	out.WriteByte(byte(len(data)))
-	// input := byteArena.Get(base64.StdEncoding.EncodedLen(len(data)))
-	// encoding.Encode(input, data)
-	out.Write(data)
-	out.WriteByte('\n')
-	o := byteArena.Get(out.Len())
-	copy(o, out.Bytes())
-	return o, nil
+	out := byteArena.Get(base64.StdEncoding.EncodedLen(len(data)) + 2)
+	out[0] = byte(len(data))
+	encoding.Encode(out[1:], data)
+	out[len(out)-1] = byte('\n')
+	return out, nil
 }

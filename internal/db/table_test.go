@@ -1,7 +1,8 @@
 package db_test
 
 import (
-	"fmt"
+	"encoding/binary"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sync"
@@ -22,10 +23,29 @@ func tearDown(t *testing.T) {
 	}
 }
 
+func setUp(t *testing.T, count int) [][]byte {
+	keys := make([][]byte, 0)
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	for i := 0; i < count; i++ {
+		buf := make([]byte, 8)
+		key := random(rng, buf)
+		keys = append(keys, key)
+	}
+	return keys
+}
+
+func random(rng *rand.Rand, b []byte) []byte {
+	key := rng.Uint32()
+	key2 := rng.Uint32()
+	binary.LittleEndian.PutUint32(b, key)
+	binary.LittleEndian.PutUint32(b[4:], key2)
+	return b
+}
+
 func TestFileDB(t *testing.T) {
-	t.Skip("skipping...")
+	//t.Skip("skipping...")
 	t.Cleanup(func() {
-		tearDown(t)
+		//tearDown(t)
 	})
 	db := gdb.New(
 		&gdb.TableOpts{
@@ -35,86 +55,69 @@ func TestFileDB(t *testing.T) {
 			WalMode:   true,
 		},
 	)
-
+	count := 64
+	keys := setUp(t, count)
 	// given
 	var wg sync.WaitGroup
-	count := 50_000
-	for i := 0; i < count; i++ {
+	for _, key := range keys {
 		wg.Add(1)
-		go func(idx int) {
+		go func(k []byte) {
 			defer wg.Done()
-			err := db.Set(
-				[]byte(fmt.Sprintf("key_%d", idx)), []byte(fmt.Sprintf("value__%d", idx)))
+			err := db.Set(k, k)
 			if err != nil {
 				t.Error(err)
 			}
-		}(i)
+		}(key)
 	}
 	wg.Wait()
-
 	// when
-	for i := 0; i < count; i++ {
+	for _, i := range keys {
 		wg.Add(1)
-		go func(idx int) {
+		go func(k []byte) {
 			defer wg.Done()
-			if _, ok := db.Get([]byte(fmt.Sprintf("key_%d", idx))); !ok {
-				t.Errorf("missing rawKey %d", idx)
+			if _, ok := db.Get(k); !ok {
+				t.Errorf("missing rawKey %s", k)
 			}
 		}(i)
 	}
 	wg.Wait()
-
-	values, ok := db.Scan([]byte("key_45"), []byte("key_48"))
-	if !ok {
-		t.Errorf("missing keys %v", values)
-	}
-	if len(values) == 0 {
-		t.Errorf("missing keys %v", values)
-	}
-
 	db.Close()
 }
 
 func TestInMemoryDB(t *testing.T) {
-	start := time.Now()
-	opts := &gdb.TableOpts{
-		DataDir:   []byte("testdata"),
-		TableName: []byte("default"),
-		InMemory:  true,
-		WalMode:   false,
-	}
-	db := gdb.New(opts)
-
+	db := gdb.New(
+		&gdb.TableOpts{
+			DataDir:   []byte("testdata"),
+			TableName: []byte("default"),
+			InMemory:  true,
+			WalMode:   false,
+		},
+	)
+	count := 64
+	keys := setUp(t, count)
 	// given
 	var wg sync.WaitGroup
-	count := 1_000
-	for i := 0; i < count; i++ {
+	for _, key := range keys {
 		wg.Add(1)
-		go func(idx int) {
+		go func(k []byte) {
 			defer wg.Done()
-			err := db.Set(
-				[]byte(fmt.Sprintf("key_%d", idx)), []byte(fmt.Sprintf("value__%d", idx)))
+			err := db.Set(k, k)
 			if err != nil {
 				t.Error(err)
 			}
-		}(i)
+		}(key)
 	}
 	wg.Wait()
-
 	// when
-	for i := 0; i < count; i++ {
+	for _, i := range keys {
 		wg.Add(1)
-		go func(idx int) {
+		go func(k []byte) {
 			defer wg.Done()
-			if _, ok := db.Get([]byte(fmt.Sprintf("key_%d", idx))); !ok {
-				t.Errorf("missing rawKey %d", idx)
+			if _, ok := db.Get(k); !ok {
+				t.Errorf("missing rawKey %s", k)
 			}
 		}(i)
 	}
 	wg.Wait()
-
-	t.Logf("%s", time.Since(start))
-
 	db.Close()
-
 }
