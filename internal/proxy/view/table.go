@@ -37,23 +37,14 @@ func (va *Table) Execute(ctx context.Context, query *gdb.Query) {
 		}
 		query.Done(resp)
 	case gdb.Count:
-		var count uint
-		va.impl.Range(func(_, _ []byte) bool {
-			select {
-			case <-ctx.Done():
-				return false
-			default:
-				count++
-				return true
-			}
-		})
+		count := va.impl.Count()
 		query.Done(
 			gdb.QueryResponse{
 				RangeValues: [][][]byte{
 					{[]byte("count"), []byte(fmt.Sprintf("%d", count))},
 				},
 				Stats: gdb.QueryStats{
-					Count: count,
+					Count: uint(count),
 				},
 				Success: true,
 			},
