@@ -1,4 +1,7 @@
+include $(wildcard vendor/build.mk)
+
 GO=~/sdk/go1.19/bin/go
+TAGS=
 
 bench: clean build
 	$(GO) test -cpu=1,4,8 -bench=BenchmarkConcurrent -run=XXX ./...
@@ -8,6 +11,9 @@ bind:
 
 build:
 	$(GO) build -o $(PWD)/bin/ github.com/blong14/gache/cmd/...
+
+build-with-tags:
+	$(GO) build -tags=${TAGS} -o $(PWD)/bin/ github.com/blong14/gache/cmd/...
 
 clean:
 	$(GO) clean --cache --testcache ./...
