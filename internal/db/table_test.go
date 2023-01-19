@@ -13,6 +13,7 @@ import (
 )
 
 func tearDown(t *testing.T) {
+	t.Helper()
 	err := os.Remove(filepath.Join("testdata", "default-wal.dat"))
 	if err != nil {
 		t.Log(err)
@@ -24,6 +25,7 @@ func tearDown(t *testing.T) {
 }
 
 func setUp(t *testing.T, count int) [][]byte {
+	t.Helper()
 	keys := make([][]byte, 0)
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for i := 0; i < count; i++ {
@@ -43,7 +45,8 @@ func random(rng *rand.Rand, b []byte) []byte {
 }
 
 func TestFileDB(t *testing.T) {
-	t.Skip("skipping...")
+	// t.Skip("skipping...")
+	start := time.Now()
 	t.Cleanup(func() {
 		tearDown(t)
 	})
@@ -55,7 +58,7 @@ func TestFileDB(t *testing.T) {
 			WalMode:   true,
 		},
 	)
-	count := 64
+	count := 1_000
 	keys := setUp(t, count)
 	// given
 	var wg sync.WaitGroup
@@ -81,6 +84,7 @@ func TestFileDB(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+	t.Logf("%s\n", time.Since(start))
 	db.Close()
 }
 

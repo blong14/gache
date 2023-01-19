@@ -40,6 +40,7 @@ type fileDatabase struct {
 	sstable  *gstable.SSTable
 	handle   *os.File
 	wal      *gwal.WAL
+	log      *gwal.Log
 	useWal   bool
 	onSet    chan struct{}
 }
@@ -81,6 +82,11 @@ func (db *fileDatabase) Connect() error {
 			panic(err)
 		}
 		db.wal = gwal.New(f)
+		conf := gwal.Config{}
+		db.log, err = gwal.NewLog(db.dir, conf)
+		if err != nil {
+			panic(err)
+		}
 	})
 	return nil
 }
@@ -99,7 +105,7 @@ func (db *fileDatabase) Count() uint64 {
 
 func (db *fileDatabase) Set(k, v []byte) error {
 	if db.useWal {
-		if err := db.wal.Set(k, v); err != nil {
+		if _, err := db.log.Append(k); err != nil {
 			return err
 		}
 	}
@@ -124,6 +130,11 @@ func (db *fileDatabase) Close() {
 			log.Println(err)
 		}
 		db.sstable.Free()
+	}
+	if db.log != nil {
+		if err := db.log.Close(); err != nil {
+			log.Println(err)
+		}
 	}
 }
 
