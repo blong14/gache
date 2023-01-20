@@ -1,7 +1,7 @@
 GO=~/sdk/go1.19/bin/go
 
-bench: clean build
-	$(GO) test -cpu=1,4,8 -bench=BenchmarkConcurrent -run=XXX ./...
+bench: clean
+	$(GO) test -cpu=1,4,8 -bench=BenchmarkSkiplist -run=XXX ./...
 
 bind:
 	$(GO) build -o $(PWD)/bin/gache.so -buildmode=c-shared github.com/blong14/gache/cmd/bind/...
