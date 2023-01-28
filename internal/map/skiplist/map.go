@@ -9,6 +9,12 @@ import (
 	_ "unsafe"
 )
 
+//go:linkname RandUint32 runtime.fastrand
+func RandUint32() uint32
+
+//go:linkname RandUint32n runtime.fastrandn
+func RandUint32n(n uint32) uint32
+
 var seed = maphash.MakeSeed()
 
 func hash(key []byte) uint64 {
@@ -17,11 +23,6 @@ func hash(key []byte) uint64 {
 	_, _ = hasher.Write(key)
 	return hasher.Sum64()
 }
-
-// XUint32n returns a lock free uint32 value in the interval [0, n).
-//
-//go:linkname XUint32n runtime.fastrandn
-func XUint32n(n uint32) uint32
 
 const maxHeight uint8 = 20
 
@@ -122,7 +123,7 @@ func (sl *SkipList) Get(key []byte) ([]byte, bool) {
 }
 
 func (sl *SkipList) Set(key, value []byte) error {
-	topLayer := XUint32n(uint32(maxHeight))
+	topLayer := RandUint32n(uint32(maxHeight))
 	if topLayer == 0 {
 		topLayer = 1
 	}
