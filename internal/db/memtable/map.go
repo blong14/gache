@@ -21,64 +21,6 @@ func hash(key []byte) uint64 {
 	return h
 }
 
-type node struct {
-	hash uint64
-	next *node
-	key  []byte
-	val  []byte
-}
-
-func newNode(h uint64, k, v []byte, n *node) *node {
-	return &node{
-		hash: h,
-		key:  k,
-		val:  v,
-		next: n,
-	}
-}
-
-func (n *node) Next() *node {
-	if n == nil {
-		return nil
-	}
-	return (*node)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&n.next))))
-}
-
-type index struct {
-	node  *node
-	down  *index
-	right *index
-}
-
-func newIndex(n *node, down, right *index) *index {
-	return &index{
-		node:  n,
-		down:  down,
-		right: right,
-	}
-}
-
-func (i *index) Node() *node {
-	if i == nil {
-		return nil
-	}
-	return (*node)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&i.node))))
-}
-
-func (i *index) Down() *index {
-	if i == nil {
-		return nil
-	}
-	return (*index)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&i.down))))
-}
-
-func (i *index) Right() *index {
-	if i == nil {
-		return nil
-	}
-	return (*index)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&i.right))))
-}
-
 type SkipList struct {
 	head  *index
 	count uint64

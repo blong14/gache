@@ -4,7 +4,7 @@ import "sync"
 
 var mtx sync.Mutex
 
-var ballast = 4096 * 4096
+var ballast = 4096
 
 type ByteArena []byte
 
