@@ -12,9 +12,12 @@
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+build-*
 
 # Directories
 .idea
 bin
 data/
 venv/
+internal/c/jemalloc/*
+!internal/c/jemalloc/build.mk

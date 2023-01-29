@@ -71,7 +71,7 @@ func BenchmarkConcurrent_QueryProxy(b *testing.B) {
 			b.ResetTimer()
 			table := []byte("default")
 			value := []byte{'v'}
-			var hits, misses int
+			var hits, misses, gets, sets int
 			b.RunParallel(func(pb *testing.PB) {
 				rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 				buf := make([]byte, 8)
@@ -88,16 +88,24 @@ func BenchmarkConcurrent_QueryProxy(b *testing.B) {
 					case <-ctx.Done():
 						b.Error(ctx.Err())
 					case result := <-done:
-						if result.Success {
-							hits++
-						} else {
-							misses++
+						switch query.Header.Inst {
+						case gdb.GetRange, gdb.GetValue:
+							gets++
+							if result.Success {
+								hits++
+							} else {
+								misses++
+							}
+						case gdb.SetValue:
+							sets++
 						}
 					}
 				}
 			})
 			b.ReportMetric(float64(hits), "hits")
 			b.ReportMetric(float64(misses), "misses")
+			b.ReportMetric(float64(gets), "gets")
+			b.ReportMetric(float64(sets), "sets")
 		})
 		gproxy.StopProxy(ctx, qp)
 		cancel()
