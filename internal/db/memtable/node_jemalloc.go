@@ -6,6 +6,8 @@ package memtable
 import (
 	"sync/atomic"
 	"unsafe"
+
+	garena "github.com/blong14/gache/internal/arena"
 )
 
 type node struct {
@@ -18,7 +20,7 @@ type node struct {
 var nodeSz = int(unsafe.Sizeof(node{}))
 
 func newNode(h uint64, k, v []byte, next *node) *node {
-	b := Calloc(nodeSz)
+	b := garena.Calloc(nodeSz)
 	n := (*node)(unsafe.Pointer(&b[0]))
 	n.hash = h
 	n.key = k
@@ -28,8 +30,8 @@ func newNode(h uint64, k, v []byte, next *node) *node {
 }
 
 func freeNode(n *node) {
-	buf := (*[MaxArrayLen]byte)(unsafe.Pointer(n))[:nodeSz:nodeSz]
-	Free(buf)
+	buf := (*[garena.MaxArrayLen]byte)(unsafe.Pointer(n))[:nodeSz:nodeSz]
+	garena.Free(buf)
 }
 
 func (n *node) Next() *node {
@@ -48,7 +50,7 @@ type index struct {
 var indexSz = int(unsafe.Sizeof(index{}))
 
 func newIndex(next *node, down, right *index) *index {
-	b := Calloc(indexSz)
+	b := garena.Calloc(indexSz)
 	n := (*index)(unsafe.Pointer(&b[0]))
 	n.node = next
 	n.down = down
@@ -57,8 +59,8 @@ func newIndex(next *node, down, right *index) *index {
 }
 
 func freeIndex(n *index) {
-	buf := (*[MaxArrayLen]byte)(unsafe.Pointer(n))[:indexSz:indexSz]
-	Free(buf)
+	buf := (*[garena.MaxArrayLen]byte)(unsafe.Pointer(n))[:indexSz:indexSz]
+	garena.Free(buf)
 }
 
 func (i *index) Node() *node {

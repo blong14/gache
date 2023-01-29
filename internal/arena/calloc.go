@@ -1,7 +1,7 @@
 //go:build jemalloc
 // +build jemalloc
 
-package memtable
+package arena
 
 /*
 #cgo LDFLAGS: /usr/local/lib/libjemalloc.a -L/usr/local/lib -Wl,-rpath,/usr/local/lib -ljemalloc -lm -lstdc++ -pthread -ldl
@@ -24,6 +24,7 @@ func Calloc(n int) []byte {
 		panic("out of memory")
 	}
 	uptr := unsafe.Pointer(ptr)
+	// fmt.Println("calloc")
 	// Interpret the C pointer as a pointer to a Go array, then slice.
 	return (*[MaxArrayLen]byte)(uptr)[:n:n]
 }

@@ -1,23 +1,20 @@
-include $(wildcard vendor/build.mk)
+include $(wildcard internal/c/*/build.mk)
 
-GO=~/sdk/go1.19/bin/go
-TAGS=
+GO 	 := ~/sdk/go1.19/bin/go
+TAGS := jemalloc
 
 bench: clean build
-	$(GO) test -cpu=1,4,8 -bench=BenchmarkConcurrent -run=XXX ./...
+	$(GO) test -tags=${TAGS} -cpu=1,4,8 -bench=BenchmarkConcurrent -run=XXX ./...
 
 bind:
-	$(GO) build -o $(PWD)/bin/gache.so -buildmode=c-shared github.com/blong14/gache/cmd/bind/...
+	$(GO) build -tags=${TAGS} -o $(PWD)/bin/gache.so -buildmode=c-shared github.com/blong14/gache/cmd/bind/...
 
-build:
-	$(GO) build -o $(PWD)/bin/ github.com/blong14/gache/cmd/...
-
-build-with-tags:
+build: $(wildcard ./**/*.go) build-jemalloc
 	$(GO) build -tags=${TAGS} -o $(PWD)/bin/ github.com/blong14/gache/cmd/...
 
-clean:
+clean: clean-jemalloc
 	$(GO) clean --cache --testcache ./...
-	rm $(PWD)/bin/*
+	rm $(PWD)/bin/* || true
 
 init: go.mod go.sum
 	$(GO) mod tidy
@@ -30,4 +27,4 @@ run: lint
 	$(GO) run github.com/blong14/gache
 
 test:
-	$(GO) test -race -cpu=8 -parallel=8 ./...
+	$(GO) test -tags=${TAGS} -race -cpu=8 -parallel=8 ./...
