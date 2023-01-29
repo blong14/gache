@@ -1,10 +1,10 @@
 include $(wildcard internal/c/*/build.mk)
 
-GO 	 := ~/sdk/go1.19/bin/go
+GO := ~/sdk/go1.19/bin/go
 TAGS := jemalloc
 
 bench: clean build
-	$(GO) test -tags=${TAGS} -cpu=1,4,8 -bench=BenchmarkConcurrent -run=XXX ./...
+	$(GO) test -tags=${TAGS} -cpu=1,4,8 -bench=BenchmarkSkiplist -run=XXX ./...
 
 bind:
 	$(GO) build -tags=${TAGS} -o $(PWD)/bin/gache.so -buildmode=c-shared github.com/blong14/gache/cmd/bind/...
