@@ -15,6 +15,7 @@
 build-*
 
 # Directories
+.deps
 .idea
 bin
 data/

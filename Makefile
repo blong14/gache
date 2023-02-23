@@ -1,6 +1,6 @@
 include $(wildcard internal/c/*/build.mk)
 
-GO := ~/sdk/go1.19/bin/go
+GO := ~/sdk/go1.20/bin/go
 TAGS := jemalloc
 
 bench: clean build
@@ -33,3 +33,8 @@ run: lint
 
 test:
 	$(GO) test -tags=${TAGS} -race -cpu=8 -parallel=8 ./...
+
+.PHONY: dl-golang
+dl-golang:
+	@wget -P .deps https://go.dev/dl/go1.20.1.linux-amd64.tar.gz
+	@tar -xf .deps/go1.20.1.linux-amd64.tar.gz
