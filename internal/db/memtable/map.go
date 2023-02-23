@@ -3,6 +3,7 @@ package memtable
 import (
 	"errors"
 	"fmt"
+	"github.com/blong14/gache/internal/db/arena"
 	"strings"
 	"sync/atomic"
 	"unsafe"
@@ -200,6 +201,7 @@ func (sk *SkipList) Get(key []byte) ([]byte, bool) {
 	return nil, false
 }
 
+func (sk *SkipList) XSet(malloc arena.ByteArena, key, value []byte) error { return nil }
 func (sk *SkipList) Set(key, value []byte) error {
 	if key == nil {
 		return errors.New("missing key")

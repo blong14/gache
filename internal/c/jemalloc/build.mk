@@ -1,8 +1,8 @@
 .PHONY: clean-jemalloc
 
-VERSION := 5.3.0
-DIR 	:= $(PWD)/internal/c/jemalloc
-SRC		:= ${DIR}/jemalloc-${VERSION}
+VERSION	:= 5.3.0
+DIR	:= $(PWD)/internal/c/jemalloc
+SRC	:= ${DIR}/jemalloc-${VERSION}
 
 ${DIR}/.deps/setup:
 	@echo ${DIR}

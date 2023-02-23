@@ -2,6 +2,7 @@ package memtable
 
 import (
 	"errors"
+	"github.com/blong14/gache/internal/db/arena"
 	"sync/atomic"
 	"unsafe"
 
@@ -35,6 +36,7 @@ func (m *MemTable) Count() uint64 {
 	return m.buffer().Count()
 }
 
+func (m *MemTable) XSet(malloc arena.ByteArena, k, v []byte) error { return nil }
 func (m *MemTable) Set(k, v []byte) error {
 	err := m.buffer().Set(k, v)
 	if err != nil {
