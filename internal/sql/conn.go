@@ -12,7 +12,7 @@ import (
 	"sync"
 
 	gdb "github.com/blong14/gache/internal/db"
-	glog "github.com/blong14/gache/internal/logging"
+	glog "github.com/blong14/gache/internal/platform/logging"
 	gproxy "github.com/blong14/gache/internal/proxy"
 )
 

@@ -7,7 +7,7 @@ import (
 	"os"
 	"runtime"
 
-	gerrors "github.com/blong14/gache/internal/errors"
+	gerrors "github.com/blong14/gache/internal/platform/errors"
 )
 
 type KeyValue struct {

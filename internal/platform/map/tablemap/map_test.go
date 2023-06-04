@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	gtable "github.com/blong14/gache/internal/map/tablemap"
+	gtable "github.com/blong14/gache/internal/platform/map/tablemap"
 )
 
 func testGetAndSet(t *testing.T) {

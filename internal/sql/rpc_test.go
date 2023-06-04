@@ -6,7 +6,7 @@ import (
 	"database/sql"
 	"testing"
 
-	gdb "github.com/blong14/gache/database"
+	gdb "github.com/blong14/gache/internal/sql"
 )
 
 func MustGetDB() *sql.DB {

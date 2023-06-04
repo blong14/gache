@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	gdb "github.com/blong14/gache/internal/db"
-	gerrors "github.com/blong14/gache/internal/errors"
+	gerrors "github.com/blong14/gache/internal/platform/errors"
 )
 
 type Table struct {

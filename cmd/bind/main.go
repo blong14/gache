@@ -9,7 +9,7 @@ import (
 	"time"
 	"unsafe"
 
-	gache "github.com/blong14/gache/database"
+	gache "github.com/blong14/gache/internal/sql"
 )
 
 func mustGetDB() *sql.DB {

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	gskl "github.com/blong14/gache/internal/map/skiplist"
+	gskl "github.com/blong14/gache/internal/platform/map/skiplist"
 )
 
 type test struct {

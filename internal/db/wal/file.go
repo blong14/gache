@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	garena "github.com/blong14/gache/internal/db/arena"
-	gfile "github.com/blong14/gache/internal/io/file"
+	gfile "github.com/blong14/gache/internal/platform/io/file"
 )
 
 type WAL struct {

@@ -11,7 +11,7 @@ import (
 	gmtable "github.com/blong14/gache/internal/db/memtable"
 	gstable "github.com/blong14/gache/internal/db/sstable"
 	gwal "github.com/blong14/gache/internal/db/wal"
-	gfile "github.com/blong14/gache/internal/io/file"
+	gfile "github.com/blong14/gache/internal/platform/io/file"
 )
 
 type Table interface {

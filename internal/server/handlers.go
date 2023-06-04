@@ -9,7 +9,7 @@ import (
 	"net/http"
 
 	gdb "github.com/blong14/gache/internal/db"
-	ghttp "github.com/blong14/gache/internal/io/http"
+	ghttp "github.com/blong14/gache/internal/platform/io/http"
 )
 
 type ErrorResponse struct {

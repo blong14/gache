@@ -6,7 +6,7 @@ import (
 
 	gactor "github.com/blong14/gache/internal"
 	gdb "github.com/blong14/gache/internal/db"
-	gfile "github.com/blong14/gache/internal/io/file"
+	gfile "github.com/blong14/gache/internal/platform/io/file"
 )
 
 type waiter struct {

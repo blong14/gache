@@ -9,8 +9,8 @@ import (
 	"time"
 
 	gdb "github.com/blong14/gache/internal/db"
-	glog "github.com/blong14/gache/internal/logging"
-	gtable "github.com/blong14/gache/internal/map/tablemap"
+	glog "github.com/blong14/gache/internal/platform/logging"
+	gtable "github.com/blong14/gache/internal/platform/map/tablemap"
 	gfile "github.com/blong14/gache/internal/proxy/file"
 	gview "github.com/blong14/gache/internal/proxy/view"
 )

@@ -9,9 +9,9 @@ import (
 	"syscall"
 	"time"
 
-	genv "github.com/blong14/gache/internal/environ"
-	ghttp "github.com/blong14/gache/internal/io/http"
-	grpc "github.com/blong14/gache/internal/io/rpc"
+	genv "github.com/blong14/gache/internal/platform/env"
+	ghttp "github.com/blong14/gache/internal/platform/io/http"
+	grpc "github.com/blong14/gache/internal/platform/io/rpc"
 	ghandlers "github.com/blong14/gache/internal/server"
 )
 

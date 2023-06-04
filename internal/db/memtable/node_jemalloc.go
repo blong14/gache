@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	garena "github.com/blong14/gache/internal/arena"
+	garena "github.com/blong14/gache/internal/db/arena"
 )
 
 type node struct {

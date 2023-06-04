@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	gfile "github.com/blong14/gache/internal/io/file"
+	gfile "github.com/blong14/gache/internal/platform/io/file"
 )
 
 func TestReadCSV(t *testing.T) {

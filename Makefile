@@ -1,7 +1,7 @@
 include $(wildcard internal/c/*/build.mk)
 
 GO := ~/sdk/go1.20/bin/go
-TAGS := jemalloc
+TAGS :=
 
 bench: clean build
 	$(GO) test -tags=${TAGS} -cpu=1,4,8 -bench=BenchmarkSkiplist -run=XXX ./...
