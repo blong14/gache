@@ -4,12 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	gfile "github.com/blong14/gache/internal/io/file"
 	"os"
 	"runtime"
 	"sync"
 	"time"
-
-	gfile "github.com/blong14/gache/internal/platform/io/file"
 )
 
 // Arena https://gist.github.com/quillaja/222c9af7ade058b60ed08e13bf0b6387

@@ -1,7 +1,6 @@
 package arena
 
 import (
-	"context"
 	"sync"
 
 	ga "arena"
@@ -49,80 +48,4 @@ func (a *arena) Free() {
 
 func (a *arena) AllocateByteSlice(len_, cap int) []byte {
 	return ga.MakeSlice[byte](a.malloc, len_, cap)
-}
-
-type Message struct {
-	Status string
-}
-
-func NewMessage() *Message {
-	return &Message{}
-}
-
-type Worker interface {
-	Context() context.Context
-	Start() error
-	Stop() error
-}
-
-var mailbox = make(chan *Message)
-
-type worker struct {
-	ctx     context.Context
-	cancel  context.CancelFunc
-	mailbox chan *Message
-	outbox  chan *Message
-}
-
-func NewWorker(ctx context.Context, cancel context.CancelFunc) Worker {
-	return &worker{
-		ctx:     ctx,
-		cancel:  cancel,
-		mailbox: mailbox,
-		outbox:  make(chan *Message),
-	}
-}
-
-func (w *worker) Context() context.Context {
-	if w.ctx == nil {
-		w.ctx = context.Background()
-		return w.ctx
-	}
-	return w.ctx
-}
-
-func Send(ctx context.Context, msg *Message) <-chan *Message {
-	out := make(chan *Message)
-	select {
-	case <-ctx.Done():
-	case mailbox <- msg:
-		go func() {
-			defer close(out)
-			select {
-			case <-ctx.Done():
-			case out <- <-msg.outbox:
-			}
-		}()
-	}
-	return out
-}
-
-func (w *worker) Start() error {
-	for range w.mailbox {
-		select {
-		case <-w.Context().Done():
-			return w.Context().Err()
-		case w.outbox <- &Message{Status: "ok"}:
-		}
-	}
-	return nil
-}
-
-func (w *worker) Stop() error {
-	if w.cancel != nil {
-		w.cancel()
-	}
-	close(w.mailbox)
-	close(w.outbox)
-	return nil
 }

@@ -1,5 +1,3 @@
-//go:build !jemalloc
-
 package memtable
 
 import (

@@ -2,14 +2,14 @@ package server
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"io"
 	"log"
 	"net/http"
 
 	gdb "github.com/blong14/gache/internal/db"
-	ghttp "github.com/blong14/gache/internal/platform/io/http"
+	ghttp "github.com/blong14/gache/internal/io/http"
+	gproxy "github.com/blong14/gache/internal/proxy"
 )
 
 type ErrorResponse struct {
@@ -28,7 +28,7 @@ type GetValueResponse struct {
 	Value  string `json:"value"`
 }
 
-func getValueService(db *sql.DB) http.HandlerFunc {
+func getValueService(proxy *gproxy.QueryProxy) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		urlQuery := r.URL.Query()
 		if !urlQuery.Has("key") {
@@ -43,18 +43,12 @@ func getValueService(db *sql.DB) http.HandlerFunc {
 		}
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
-		var result *gdb.QueryResponse
-		err := db.QueryRowContext(
-			ctx,
-			"select value from :table where key = :key",
-			sql.Named("table", []byte(table)),
-			sql.Named("key", []byte(key)),
-		).Scan(&result)
+		query, _ := gdb.NewGetValueQuery(ctx, []byte(table), []byte(key))
+		proxy.Send(ctx, query)
+		result := query.GetResponse()
 		var resp GetValueResponse
 		var status int
 		switch {
-		case err != nil:
-			status = http.StatusInternalServerError
 		case !result.Success:
 			status = http.StatusNotFound
 			resp.Status = "not found"
@@ -81,7 +75,7 @@ type SetValueResponse struct {
 	Value  string `json:"value"`
 }
 
-func setValueService(db *sql.DB) http.HandlerFunc {
+func setValueService(proxy *gproxy.QueryProxy) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		body := r.Body
 		if body == nil {
@@ -99,19 +93,12 @@ func setValueService(db *sql.DB) http.HandlerFunc {
 		}
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
-		var result *gdb.QueryResponse
-		err := db.QueryRowContext(
-			ctx,
-			"insert into :table set key = :key, value = :value",
-			sql.Named("table", []byte(req.Table)),
-			sql.Named("key", []byte(req.Key)),
-			sql.Named("value", []byte(req.Value)),
-		).Scan(&result)
+		query, _ := gdb.NewSetValueQuery(ctx, []byte(req.Table), []byte(req.Key), []byte(req.Value))
+		proxy.Send(ctx, query)
+		result := query.GetResponse()
 		var resp SetValueResponse
 		var status int
 		switch {
-		case err != nil:
-			status = http.StatusInternalServerError
 		case !result.Success:
 			status = http.StatusNotFound
 			resp.Status = "not found"
@@ -126,10 +113,10 @@ func setValueService(db *sql.DB) http.HandlerFunc {
 	}
 }
 
-func HTTPHandlers(db *sql.DB) ghttp.Handler {
+func HTTPHandlers(proxy *gproxy.QueryProxy) ghttp.Handler {
 	return map[string]http.HandlerFunc{
 		"/healthz": HealthzService,
-		"/get":     MustBe(http.MethodGet, getValueService(db)),
-		"/set":     MustBe(http.MethodPost, setValueService(db)),
+		"/get":     MustBe(http.MethodGet, getValueService(proxy)),
+		"/set":     MustBe(http.MethodPost, setValueService(proxy)),
 	}
 }

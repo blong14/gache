@@ -3,7 +3,7 @@ package server
 import (
 	"net/http"
 
-	ghttp "github.com/blong14/gache/internal/platform/io/http"
+	ghttp "github.com/blong14/gache/internal/io/http"
 )
 
 func MustBe(method string, next http.HandlerFunc) http.HandlerFunc {

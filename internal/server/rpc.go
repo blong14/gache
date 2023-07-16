@@ -7,11 +7,11 @@ import (
 	"time"
 
 	gdb "github.com/blong14/gache/internal/db"
-	gerrors "github.com/blong14/gache/internal/platform/errors"
-	grpc "github.com/blong14/gache/internal/platform/io/rpc"
-	glog "github.com/blong14/gache/internal/platform/logging"
+	gerrors "github.com/blong14/gache/internal/errors"
+	grpc "github.com/blong14/gache/internal/io/rpc"
+	glog "github.com/blong14/gache/internal/logging"
 	gproxy "github.com/blong14/gache/internal/proxy"
-	gache "github.com/blong14/gache/internal/sql"
+	gache "github.com/blong14/gache/sql"
 )
 
 var ErrNilClient = gerrors.NewGError(errors.New("nil client"))

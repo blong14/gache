@@ -1,121 +1,115 @@
 package proxy_test
 
 import (
+	"bytes"
 	"context"
-	"encoding/binary"
-	"fmt"
-	"math/rand"
-	"os"
-	"path/filepath"
 	"testing"
-	"time"
 
 	gdb "github.com/blong14/gache/internal/db"
 	gproxy "github.com/blong14/gache/internal/proxy"
 )
 
-func tearDown(t *testing.T) {
-	err := os.Remove(filepath.Join("testdata", "default-wal.dat"))
-	if err != nil {
-		t.Log(err)
-	}
-	err = os.Remove(filepath.Join("testdata", "default.dat"))
-	if err != nil {
-		t.Log(err)
+func assertMatch(t *testing.T, want []byte, got []byte) {
+	if !bytes.Equal(want, got) {
+		t.Errorf("want %s got %s", want, got)
 	}
 }
 
-func TestQueryProxy_Execute(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
-	qp, err := gproxy.NewQueryProxy()
-	if err != nil {
-		t.Error(err)
-	}
-	gproxy.StartProxy(ctx, qp)
-	t.Cleanup(func() {
-		gproxy.StopProxy(ctx, qp)
-		cancel()
-		tearDown(t)
-	})
+func testGetHit(ctx context.Context, v *gproxy.Table, expected *gdb.QueryResponse) func(t *testing.T) {
+	return func(t *testing.T) {
+		t.Parallel()
+		query, outbox := gdb.NewSetValueQuery(ctx,
+			[]byte("default"), expected.Key, expected.Value)
+		go v.Execute(query.Context(), query)
+		select {
+		case <-ctx.Done():
+			t.Error(ctx.Err())
+		case actual, ok := <-outbox:
+			if !ok || !actual.Success {
+				t.Errorf("not ok %v", query)
+			}
+		}
 
-	start := time.Now()
-	query, done := gdb.NewLoadFromFileQuery(
-		ctx, []byte("default"), []byte(filepath.Join("testdata", "i.csv")))
-	qp.Send(ctx, query)
-	select {
-	case <-ctx.Done():
-		t.Error(ctx.Err())
-	case result, ok := <-done:
-		if !ok || !result.Success {
-			t.Error("not ok")
-			return
+		query, outbox = gdb.NewGetValueQuery(ctx, []byte("default"), expected.Key)
+		query.KeyRange.Start = expected.Key
+		go v.Execute(query.Context(), query)
+		select {
+		case <-ctx.Done():
+			t.Error(ctx.Err())
+		case actual, ok := <-outbox:
+			if !ok || !actual.Success {
+				t.Errorf("not ok %v", query)
+			}
+			for _, r := range actual.RangeValues {
+				assertMatch(t, expected.Value, r[1])
+			}
 		}
 	}
-	t.Logf("finished - %s", time.Since(start))
 }
 
-func BenchmarkConcurrent_QueryProxy(b *testing.B) {
-	b.Setenv("DEBUG", "false")
-	b.Setenv("TRACE", "false")
-	for _, i := range []int{3, 5, 7} {
-		readFrac := float32(i) / 10.0
-		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Second)
-		qp, err := gproxy.NewQueryProxy()
-		if err != nil {
-			b.Error(err)
+func testScanHit(ctx context.Context, v *gproxy.Table, expected *gdb.QueryResponse) func(t *testing.T) {
+	return func(t *testing.T) {
+		t.Parallel()
+		query, outbox := gdb.NewSetValueQuery(ctx,
+			[]byte("default"), expected.Key, expected.Value)
+		go v.Execute(query.Context(), query)
+		select {
+		case <-ctx.Done():
+			t.Error(ctx.Err())
+		case actual, ok := <-outbox:
+			if !ok || !actual.Success {
+				t.Errorf("not ok %v", query)
+			}
 		}
-		gproxy.StartProxy(ctx, qp)
 
-		b.Run(fmt.Sprintf("skiplist_%v", i*10), func(b *testing.B) {
-			b.ReportAllocs()
-			b.ResetTimer()
-			table := []byte("default")
-			value := []byte{'v'}
-			var hits, misses, gets, sets int
-			b.RunParallel(func(pb *testing.PB) {
-				rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-				buf := make([]byte, 8)
-				for pb.Next() {
-					var query *gdb.Query
-					var done chan gdb.QueryResponse
-					if rng.Float32() < readFrac {
-						query, done = gdb.NewGetValueQuery(ctx, table, randomKey(rng, buf))
-					} else {
-						query, done = gdb.NewSetValueQuery(ctx, table, randomKey(rng, buf), value)
-					}
-					qp.Send(ctx, query)
-					select {
-					case <-ctx.Done():
-						b.Error(ctx.Err())
-					case result := <-done:
-						switch query.Header.Inst {
-						case gdb.GetRange, gdb.GetValue:
-							gets++
-							if result.Success {
-								hits++
-							} else {
-								misses++
-							}
-						case gdb.SetValue:
-							sets++
-						}
-					}
-				}
-			})
-			b.ReportMetric(float64(hits), "hits")
-			b.ReportMetric(float64(misses), "misses")
-			b.ReportMetric(float64(gets), "gets")
-			b.ReportMetric(float64(sets), "sets")
-		})
-		gproxy.StopProxy(ctx, qp)
-		cancel()
+		query, outbox = gdb.NewGetValueQuery(ctx, []byte("default"), expected.Key)
+		query.Header.Inst = gdb.GetRange
+		query.KeyRange.Start = expected.Key
+		go v.Execute(query.Context(), query)
+		select {
+		case <-ctx.Done():
+			t.Error(ctx.Err())
+		case actual, ok := <-outbox:
+			if !ok || !actual.Success {
+				t.Errorf("not ok %v", query)
+			}
+			for _, r := range actual.RangeValues {
+				assertMatch(t, expected.Value, r[1])
+			}
+		}
+
+		query, outbox = gdb.NewGetValueQuery(ctx, []byte("default"), expected.Key)
+		query.Header.Inst = gdb.GetRange
+		query.KeyRange.Start = expected.Key
+		go v.Execute(query.Context(), query)
+		select {
+		case <-ctx.Done():
+			t.Error(ctx.Err())
+		case actual, ok := <-outbox:
+			if !ok || !actual.Success {
+				t.Errorf("not ok %v", query)
+			}
+			for _, r := range actual.RangeValues {
+				assertMatch(t, expected.Value, r[1])
+			}
+		}
 	}
 }
 
-func randomKey(rng *rand.Rand, b []byte) []byte {
-	key := rng.Uint32()
-	key2 := rng.Uint32()
-	binary.LittleEndian.PutUint32(b, key)
-	binary.LittleEndian.PutUint32(b[4:], key2)
-	return b
+func TestTable_Get(t *testing.T) {
+	t.Parallel()
+	// given
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	opts := &gdb.TableOpts{
+		TableName: []byte("default"),
+		InMemory:  true,
+	}
+	v := gproxy.NewTable(opts)
+	hit := &gdb.QueryResponse{
+		Key:   []byte("key"),
+		Value: []byte("value"),
+	}
+	t.Run("hit", testGetHit(ctx, v, hit))
+	t.Run("hit", testScanHit(ctx, v, hit))
 }

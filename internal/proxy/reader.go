@@ -1,12 +1,11 @@
-package file
+package proxy
 
 import (
 	"context"
 	"sync"
 
-	gactor "github.com/blong14/gache/internal"
 	gdb "github.com/blong14/gache/internal/db"
-	gfile "github.com/blong14/gache/internal/platform/io/file"
+	gfile "github.com/blong14/gache/internal/io/file"
 )
 
 type waiter struct {
@@ -32,19 +31,19 @@ func (w *waiter) Wait(ctx context.Context) {
 	w.WaitGroup.Wait()
 }
 
-type Reader struct {
-	pool   gactor.Actor
+type CSVReader struct {
+	worker Actor
 	waiter *waiter
 }
 
-func New(pool gactor.Actor) *Reader {
-	return &Reader{
-		pool:   pool,
+func NewCSVReader(worker Actor) *CSVReader {
+	return &CSVReader{
+		worker: worker,
 		waiter: &waiter{chns: make([]chan gdb.QueryResponse, 0)},
 	}
 }
 
-func (f *Reader) ReadCSV(ctx context.Context, query *gdb.Query) {
+func (f *CSVReader) Read(ctx context.Context, query *gdb.Query) {
 	if query.Header.Inst != gdb.Load {
 		if query != nil {
 			query.Done(gdb.QueryResponse{Success: false})
@@ -57,11 +56,14 @@ func (f *Reader) ReadCSV(ctx context.Context, query *gdb.Query) {
 	for reader.Scan() {
 		var rows []gdb.KeyValue
 		for _, r := range reader.Rows() {
-			rows = append(rows, gdb.KeyValue{Key: r.Key, Value: r.Value})
+			rows = append(rows, gdb.KeyValue{
+				Key:   []byte(r[0]),
+				Value: []byte(r[1]),
+			})
 		}
 		q, done := gdb.NewBatchSetValueQuery(ctx, query.Header.TableName, rows)
 		f.waiter.Add(done)
-		f.pool.Send(ctx, q)
+		f.worker.Send(ctx, q)
 	}
 	f.waiter.Wait(ctx)
 	success := false
