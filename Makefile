@@ -5,9 +5,6 @@ GOLINT := v1.50
 bench: $(wildcard ./**/*.go)
 	$(GO) test -cpu=1,4,8 -bench=BenchmarkSkiplist -run=XXX ./...
 
-bind: $(wildcard ./**/*.go)
-	$(GO) build -o $(PWD)/bin/gache.so -buildmode=c-shared github.com/blong14/gache/cmd/bind/...
-
 build: $(wildcard ./**/*.go)
 	$(GO) build -o $(PWD)/bin/ github.com/blong14/gache/cmd/...
 
