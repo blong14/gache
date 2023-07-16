@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	genv "github.com/blong14/gache/internal/environ"
+	genv "github.com/blong14/gache/internal/env"
 )
 
 func init() {

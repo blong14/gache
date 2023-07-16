@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	gache "github.com/blong14/gache/database"
-	genv "github.com/blong14/gache/internal/environ"
+	genv "github.com/blong14/gache/internal/env"
+	gache "github.com/blong14/gache/sql"
 )
 
 func mustGetDB() *sql.DB {

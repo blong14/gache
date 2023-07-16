@@ -1,174 +1,101 @@
 package proxy
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"runtime"
-	"sync"
-	"time"
-
 	gdb "github.com/blong14/gache/internal/db"
-	glog "github.com/blong14/gache/internal/logging"
-	gtable "github.com/blong14/gache/internal/map/tablemap"
-	gfile "github.com/blong14/gache/internal/proxy/file"
-	gview "github.com/blong14/gache/internal/proxy/view"
+	gerrors "github.com/blong14/gache/internal/errors"
 )
 
-type Worker struct {
-	id    string
-	inbox <-chan *gdb.Query
-	stop  chan interface{}
-	pool  *WorkPool
+type Table struct {
+	impl gdb.Table
+	name []byte
 }
 
-func (s *Worker) Start(ctx context.Context) {
-	glog.Track("%T::%s starting", s.pool, s.id)
-	for {
-		select {
-		case <-ctx.Done():
-			glog.Track("%T::%s ctx canceled", s.pool, s.id)
-			return
-		case <-s.stop:
-			glog.Track("%T::%s stopping", s.pool, s.id)
-			return
-		case query, ok := <-s.inbox:
-			if !ok {
-				return
-			}
-			start := time.Now()
-			s.pool.Execute(ctx, query)
-			glog.Track(
-				"%T::%s executed %s %s [%s]",
-				s.pool, s.id, query.Header.Inst, query.Key, time.Since(start),
-			)
-		}
+func NewTable(opts *gdb.TableOpts) *Table {
+	return &Table{
+		name: opts.TableName,
+		impl: gdb.New(opts),
 	}
 }
 
-func (s *Worker) Stop(ctx context.Context) {
-	select {
-	case <-ctx.Done():
-	case s.stop <- struct{}{}:
-	}
-}
-
-type WorkPool struct {
-	inbox chan *gdb.Query
-	// table name to table view
-	tables  *gtable.TableMap[[]byte, *gview.Table]
-	workers []Worker
-}
-
-func NewWorkPool(inbox chan *gdb.Query) *WorkPool {
-	return &WorkPool{
-		inbox:   inbox,
-		tables:  gtable.New[[]byte, *gview.Table](bytes.Compare),
-		workers: make([]Worker, 0),
-	}
-}
-
-func (w *WorkPool) Start(ctx context.Context) {
-	for i := 0; i < runtime.NumCPU(); i++ {
-		worker := Worker{
-			id:    fmt.Sprintf("worker::%d", i),
-			inbox: w.inbox,
-			stop:  make(chan interface{}),
-			pool:  w,
-		}
-		w.workers = append(w.workers, worker)
-		go worker.Start(ctx)
-	}
-}
-
-func (w *WorkPool) Send(ctx context.Context, query *gdb.Query) {
-	select {
-	case <-ctx.Done():
-	case w.inbox <- query:
-	}
-}
-
-func (w *WorkPool) Execute(ctx context.Context, query *gdb.Query) {
+func (va *Table) Execute(_ context.Context, query *gdb.Query) {
 	switch query.Header.Inst {
-	case gdb.AddTable:
-		var opts *gdb.TableOpts
-		if query.Header.Opts != nil {
-			opts = query.Header.Opts
-		} else {
-			opts = &gdb.TableOpts{
-				InMemory:  true,
-				WalMode:   false,
-				DataDir:   []byte("testdata"),
-				TableName: query.Header.TableName,
+	case gdb.GetValue:
+		var resp gdb.QueryResponse
+		if value, ok := va.impl.Get(query.Key); ok {
+			resp = gdb.QueryResponse{
+				Key:         query.Key,
+				Value:       value,
+				RangeValues: [][][]byte{{query.Key, value}},
+				Stats: gdb.QueryStats{
+					Count: 1,
+				},
+				Success: true,
 			}
 		}
-		t := gview.New(opts)
-		w.tables.Set(query.Header.TableName, t)
-		query.Done(gdb.QueryResponse{Success: true})
-	case gdb.Load:
-		glog.Track(
-			"loading csv %s for %s", query.Header.FileName, query.Header.TableName)
-		loader := gfile.New(w)
-		loader.ReadCSV(ctx, query)
-	default:
-		table, ok := w.tables.Get(query.Header.TableName)
-		if !ok {
-			query.Done(gdb.QueryResponse{Success: false})
-			return
+		query.Done(resp)
+	case gdb.Count:
+		count := va.impl.Count()
+		query.Done(
+			gdb.QueryResponse{
+				RangeValues: [][][]byte{
+					{[]byte("count"), []byte(fmt.Sprintf("%d", count))},
+				},
+				Stats: gdb.QueryStats{
+					Count: uint(count),
+				},
+				Success: true,
+			},
+		)
+	case gdb.GetRange:
+		var resp gdb.QueryResponse
+		values, ok := va.impl.ScanWithLimit(
+			query.KeyRange.Start, query.KeyRange.End, query.KeyRange.Limit)
+		if ok {
+			resp = gdb.QueryResponse{
+				RangeValues: values,
+				Stats: gdb.QueryStats{
+					Count: uint(len(values)),
+				},
+				Success: true,
+			}
 		}
-		table.Execute(ctx, query)
+		query.Done(resp)
+	case gdb.SetValue:
+		var resp gdb.QueryResponse
+		if err := va.impl.Set(query.Key, query.Value); err == nil {
+			resp = gdb.QueryResponse{
+				Key:   query.Key,
+				Value: query.Value,
+				Stats: gdb.QueryStats{
+					Count: 1,
+				},
+				Success: true,
+			}
+		}
+		query.Done(resp)
+	case gdb.BatchSetValue:
+		var errs *gerrors.Error
+		for _, kv := range query.Values {
+			if kv.Valid() {
+				errs = gerrors.Append(errs, va.impl.Set(kv.Key, kv.Value))
+			}
+		}
+		var resp gdb.QueryResponse
+		if errs.ErrorOrNil() == nil {
+			resp = gdb.QueryResponse{
+				Stats: gdb.QueryStats{
+					Count: uint(len(query.Values)),
+				},
+				Success: true,
+			}
+		}
+		query.Done(resp)
+	default:
 	}
 }
 
-func (w *WorkPool) WaitAndStop(ctx context.Context) {
-	glog.Track("%T stopping...\n", w)
-	var wg sync.WaitGroup
-	for _, worker := range w.workers {
-		wg.Add(1)
-		go func(w Worker) {
-			defer wg.Done()
-			w.Stop(ctx)
-			close(w.stop)
-		}(worker)
-	}
-	wg.Wait()
-	w.tables.Range(func(k []byte, table *gview.Table) bool {
-		table.Stop()
-		return true
-	})
-	glog.Track("%T stopped\n", w)
-}
-
-type QueryProxy struct {
-	inbox chan *gdb.Query
-	pool  *WorkPool
-}
-
-func NewQueryProxy() (*QueryProxy, error) {
-	inbox := make(chan *gdb.Query)
-	return &QueryProxy{
-		inbox: inbox,
-		pool:  NewWorkPool(inbox),
-	}, nil
-}
-
-func (qp *QueryProxy) Send(ctx context.Context, query *gdb.Query) {
-	qp.pool.Send(ctx, query)
-}
-
-func StartProxy(ctx context.Context, qp *QueryProxy) {
-	glog.Track("starting query proxy")
-	qp.pool.Start(ctx)
-	for _, table := range []string{"default"} {
-		query, done := gdb.NewAddTableQuery(ctx, []byte(table))
-		qp.Send(ctx, query)
-		<-done
-	}
-	glog.Track("default tables added")
-}
-
-func StopProxy(ctx context.Context, qp *QueryProxy) {
-	glog.Track("stopping query proxy")
-	qp.pool.WaitAndStop(ctx)
-	close(qp.inbox)
+func (va *Table) Stop() {
+	va.impl.Close()
 }

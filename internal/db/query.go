@@ -124,19 +124,9 @@ func NewGetValueQuery(ctx context.Context, db []byte, key []byte) (*Query, chan 
 	query := NewQuery(ctx, done)
 	query.Header = QueryHeader{
 		TableName: db,
-		Inst:      GetRange,
+		Inst:      GetValue,
 	}
 	query.Key = key
-	return query, done
-}
-
-func NewPrintQuery(ctx context.Context, db []byte) (*Query, chan QueryResponse) {
-	done := make(chan QueryResponse, 1)
-	query := NewQuery(ctx, done)
-	query.Header = QueryHeader{
-		TableName: db,
-		Inst:      Print,
-	}
 	return query, done
 }
 
@@ -179,17 +169,6 @@ func NewAddTableQuery(ctx context.Context, db []byte) (*Query, chan QueryRespons
 	done := make(chan QueryResponse, 1)
 	query := NewQuery(ctx, done)
 	query.Header = QueryHeader{
-		TableName: db,
-		Inst:      AddTable,
-	}
-	return query, done
-}
-
-func XNewAddTableQuery(ctx context.Context, dir, db []byte) (*Query, chan QueryResponse) {
-	done := make(chan QueryResponse, 1)
-	query := NewQuery(ctx, done)
-	query.Header = QueryHeader{
-		DataDir:   dir,
 		TableName: db,
 		Inst:      AddTable,
 	}

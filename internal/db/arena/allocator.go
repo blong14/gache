@@ -1,6 +1,10 @@
 package arena
 
-import "sync"
+import (
+	"sync"
+
+	ga "arena"
+)
 
 var mtx sync.Mutex
 
@@ -23,4 +27,25 @@ func (na *ByteArena) Allocate(len_ int) []byte {
 	n := (*na)[offset : len(*na)-1]
 	*na = (*na)[:offset]
 	return n
+}
+
+type Arena interface {
+	AllocateByteSlice(len_, cap int) []byte
+	Free()
+}
+
+type arena struct {
+	malloc *ga.Arena
+}
+
+func NewArena() Arena {
+	return &arena{malloc: ga.NewArena()}
+}
+
+func (a *arena) Free() {
+	a.malloc.Free()
+}
+
+func (a *arena) AllocateByteSlice(len_, cap int) []byte {
+	return ga.MakeSlice[byte](a.malloc, len_, cap)
 }

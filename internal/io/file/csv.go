@@ -10,14 +10,9 @@ import (
 	gerrors "github.com/blong14/gache/internal/errors"
 )
 
-type KeyValue struct {
-	Key   []byte
-	Value []byte
-}
-
 type Reader struct {
 	max       int
-	token     []KeyValue
+	token     [][]string
 	errs      *gerrors.Error
 	data      string
 	handle    *os.File
@@ -31,15 +26,15 @@ func (s *Reader) Init() {
 	}
 	s.handle = f
 	s.csvReader = csv.NewReader(s.handle)
-	s.csvReader.ReuseRecord = true
-	s.token = make([]KeyValue, s.max)
+	s.csvReader.ReuseRecord = false
+	s.token = make([][]string, s.max)
 }
 
 func (s *Reader) Err() *gerrors.Error {
 	return s.errs
 }
 
-func (s *Reader) Rows() []KeyValue {
+func (s *Reader) Rows() [][]string {
 	return s.token
 }
 
@@ -53,7 +48,7 @@ func (s *Reader) Scan() bool {
 	if err := s.errs.ErrorOrNil(); err != nil {
 		return false
 	}
-	out := make([]KeyValue, 0)
+	out := make([][]string, 0, s.max)
 	for {
 		row, err := s.csvReader.Read()
 		if err == io.EOF {
@@ -63,10 +58,7 @@ func (s *Reader) Scan() bool {
 			s.errs = gerrors.Append(s.errs, err)
 			break
 		}
-		out = append(out, KeyValue{
-			Key:   []byte(row[0]),
-			Value: []byte(row[1]),
-		})
+		out = append(out, row)
 		if len(out) == s.max {
 			copy(s.token, out)
 			return true
