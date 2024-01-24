@@ -14,21 +14,21 @@ type Client interface {
 	Set(ctx context.Context, t, k, v []byte) error
 }
 
-// client implements Client
-type client struct {
+// proxyClient implements Client
+type proxyClient struct {
 	proxy *gproxy.QueryProxy
 }
 
-func New() Client {
+func NewProxyClient() Client {
 	proxy, err := gproxy.NewQueryProxy()
 	if err != nil {
 		panic(err)
 	}
 	gproxy.StartProxy(context.Background(), proxy)
-	return &client{proxy: proxy}
+	return &proxyClient{proxy: proxy}
 }
 
-func (c *client) Get(ctx context.Context, table, key []byte) ([]byte, error) {
+func (c *proxyClient) Get(ctx context.Context, table, key []byte) ([]byte, error) {
 	query, _ := gdb.NewGetValueQuery(ctx, table, key)
 	c.proxy.Send(ctx, query)
 	resp := query.GetResponse()
@@ -38,7 +38,7 @@ func (c *client) Get(ctx context.Context, table, key []byte) ([]byte, error) {
 	return resp.Value, nil
 }
 
-func (c *client) Set(ctx context.Context, table, key, value []byte) error {
+func (c *proxyClient) Set(ctx context.Context, table, key, value []byte) error {
 	query, _ := gdb.NewSetValueQuery(ctx, table, key, value)
 	c.proxy.Send(ctx, query)
 	resp := query.GetResponse()
@@ -48,7 +48,8 @@ func (c *client) Set(ctx context.Context, table, key, value []byte) error {
 	return nil
 }
 
-func (c *client) Close(ctx context.Context) error {
+func (c *proxyClient) Close(ctx context.Context) error {
 	gproxy.StopProxy(ctx, c.proxy)
 	return nil
 }
+

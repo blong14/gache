@@ -30,6 +30,7 @@ func (na *ByteArena) Allocate(len_ int) []byte {
 }
 
 type Arena interface {
+	Allocator() *ga.Arena
 	AllocateByteSlice(len_, cap int) []byte
 	Free()
 }
@@ -42,10 +43,22 @@ func NewArena() Arena {
 	return &arena{malloc: ga.NewArena()}
 }
 
+func (a *arena) Allocator() *ga.Arena {
+	return a.malloc
+}
+
 func (a *arena) Free() {
 	a.malloc.Free()
 }
 
 func (a *arena) AllocateByteSlice(len_, cap int) []byte {
 	return ga.MakeSlice[byte](a.malloc, len_, cap)
+}
+
+func MakeByteSlice(alloc *ga.Arena, len_, cap int) []byte {
+	return ga.MakeSlice[byte](alloc, len_, cap)
+}
+
+func MakeNew[T any](alloc *ga.Arena) *T {
+	return ga.New[T](alloc)
 }

@@ -7,7 +7,7 @@ import (
 	"os"
 	"sync"
 
-	garena "github.com/blong14/gache/internal/db/arena"
+	garena "github.com/blong14/gache/internal/arena"
 	gfile "github.com/blong14/gache/internal/io/file"
 	gmap "github.com/blong14/gache/internal/map/tablemap"
 )

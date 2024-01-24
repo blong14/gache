@@ -10,7 +10,7 @@ import (
 
 func TestClient(t *testing.T) {
 	ctx := context.Background()
-	conn := gclient.New()
+	conn := gclient.NewProxyClient()
 	table, key, value := []byte("default"), []byte("__key__"), []byte("__value__")
 	if err := conn.Set(ctx, table, key, value); err != nil {
 		t.Error(err)
@@ -31,3 +31,4 @@ func TestClient(t *testing.T) {
 		t.Error(err)
 	}
 }
+
