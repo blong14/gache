@@ -1,5 +1,5 @@
-GO := ~/sdk/go1.20/bin/go
-GOVERSION := go1.20.1
+GO := ~/sdk/go1.21/bin/go
+GOVERSION := go1.21.3
 GOLINT := v1.50
 
 bench: $(wildcard ./**/*.go)
